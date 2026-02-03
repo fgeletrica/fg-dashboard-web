@@ -1,0 +1,207 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../services/pro_access.dart';
+import '../routes/app_routes.dart';
+
+class EquipamentosScreen extends StatefulWidget {
+  const EquipamentosScreen({super.key});
+
+  @override
+  State<EquipamentosScreen> createState() => _EquipamentosScreenState();
+}
+
+class _EquipamentosScreenState extends State<EquipamentosScreen> {
+  bool _loading = true;
+  bool _pro = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await ProAccess.hasProAccessNow();
+    if (!mounted) return;
+    setState(() {
+      _pro = ok;
+      _loading = false;
+    });
+  }
+
+  // BTU/h -> potência elétrica aproximada (W)
+  // Regra prática (ar de janela/inverter): 7500 BTU ≈ 700~900W dependendo eficiência.
+  // Vamos usar uma tabela “pé no chão” que você pode ajustar depois.
+  int _btuToW(int btu) {
+    // aproximação: W ≈ BTU * 0.09 (fator conservador)
+    return (btu * 0.09).round();
+  }
+
+  void _goCalcPrefill(
+      {required String title, required int powerW, required int voltage}) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.calc,
+      arguments: {
+        "title": title,
+        "powerW": powerW,
+        "voltage": voltage,
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+        title: const Text('Equipamentos (PRO)'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : !_pro
+              ? _locked(context)
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _section('Chuveiros (W)'),
+                    _tile(
+                        'Chuveiro 4500W (127V)',
+                        'padrão',
+                        () => _goCalcPrefill(
+                            title: 'Chuveiro 4500W',
+                            powerW: 4500,
+                            voltage: 127)),
+                    _tile(
+                        'Chuveiro 5500W (220V)',
+                        'padrão',
+                        () => _goCalcPrefill(
+                            title: 'Chuveiro 5500W',
+                            powerW: 5500,
+                            voltage: 220)),
+                    _tile(
+                        'Chuveiro 6800W (220V)',
+                        'padrão',
+                        () => _goCalcPrefill(
+                            title: 'Chuveiro 6800W',
+                            powerW: 6800,
+                            voltage: 220)),
+                    _tile(
+                        'Chuveiro 7500W (220V)',
+                        'padrão',
+                        () => _goCalcPrefill(
+                            title: 'Chuveiro 7500W',
+                            powerW: 7500,
+                            voltage: 220)),
+                    const SizedBox(height: 16),
+                    _section('Ar condicionado (BTU → W)'),
+                    _acTile(7500),
+                    _acTile(9000),
+                    _acTile(10000),
+                    _acTile(12000),
+                    _acTile(18000),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Obs.: BTU→W é aproximação. Você pode ajustar manualmente na tela de cálculo.',
+                      style: TextStyle(color: Colors.white.withOpacity(.70)),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _locked(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.border.withOpacity(.35)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock, color: AppTheme.gold, size: 36),
+            const SizedBox(height: 10),
+            const Text('Somente para PRO',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            const SizedBox(height: 6),
+            Text('Ative o PRO para usar Equipamentos.',
+                style: TextStyle(color: Colors.white.withOpacity(.7))),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.gold,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed(AppRoutes.paywall),
+                child: const Text('Ver planos',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _section(String t) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(t,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+    );
+  }
+
+  Widget _tile(String title, String subtitle, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.border.withOpacity(.35)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.flash_on, color: AppTheme.gold),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w900)),
+                  Text(subtitle,
+                      style: TextStyle(color: Colors.white.withOpacity(.65))),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _acTile(int btu) {
+    final w = _btuToW(btu);
+    return _tile(
+      'Ar de janela $btu BTU (≈ ${w}W)',
+      'toque para preencher no cálculo',
+      () => _goCalcPrefill(title: 'Ar $btu BTU', powerW: w, voltage: 220),
+    );
+  }
+}

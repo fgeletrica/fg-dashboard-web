@@ -1,0 +1,274 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../services/pro_access.dart';
+import '../services/materials_store.dart';
+
+class MaterialsScreen extends StatefulWidget {
+  const MaterialsScreen({super.key});
+
+  @override
+  State<MaterialsScreen> createState() => _MaterialsScreenState();
+}
+
+class _MaterialsScreenState extends State<MaterialsScreen> {
+  bool _checkingPro = true;
+  bool _hasPro = false;
+  List<Map<String, dynamic>> _items = [];
+
+  bool loading = true;
+  bool pro = false;
+
+  List<MaterialDbItem> items = [];
+
+  final nameCtrl = TextEditingController();
+  final unitCtrl = TextEditingController(text: 'un');
+  final priceCtrl = TextEditingController(text: '0');
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAndLoad();
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    unitCtrl.dispose();
+    priceCtrl.dispose();
+    super.dispose();
+  }
+
+  double _toDouble(String s) =>
+      double.tryParse(s.replaceAll(',', '.').trim()) ?? 0;
+
+  Future<void> _checkAndLoad() async {
+    pro = await ProAccess.hasProAccessNow();
+    if (!mounted) return;
+    if (!pro) {
+      setState(() => loading = false);
+      return;
+    }
+    items = await MaterialsStore.load();
+    if (!mounted) return;
+    setState(() => loading = false);
+  }
+
+  Future<void> _reload() async {
+    items = await MaterialsStore.load();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _add() async {
+    final n = nameCtrl.text.trim();
+    final u = unitCtrl.text.trim().isEmpty ? 'un' : unitCtrl.text.trim();
+    final p = _toDouble(priceCtrl.text);
+    if (n.isEmpty) return;
+
+    await MaterialsStore.add(MaterialDbItem(name: n, unit: u, price: p));
+    nameCtrl.clear();
+    unitCtrl.text = 'un';
+    priceCtrl.text = '0';
+    await _reload();
+  }
+
+  Future<void> _del(int i) async {
+    await MaterialsStore.removeAt(i);
+    await _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_checkingPro) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_hasPro) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Meus Materiais (PRO)')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Ative o PRO para usar Meus Materiais.'),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pushNamed('/paywall'),
+                child: const Text('Ver planos'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+          backgroundColor: AppTheme.bg,
+          title: const Text('Meus Materiais (PRO)')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : (!pro ? _locked(context) : _content()),
+    );
+  }
+
+  Widget _locked(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.border.withOpacity(.35)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock, color: AppTheme.gold, size: 36),
+            const SizedBox(height: 10),
+            const Text('Recurso PRO',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            const SizedBox(height: 6),
+            Text('Ative o PRO para usar Meus Materiais.',
+                style: TextStyle(color: Colors.white.withOpacity(.7))),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.gold,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed(AppRoutes.paywall),
+                child: const Text('Ver planos',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _content() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Cadastrar material',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              _field(nameCtrl, 'Nome do material'),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _field(unitCtrl, 'Unidade (m, un, kg...)')),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: _field(priceCtrl, 'Preço (R\$)', number: true)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _add,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.gold,
+                      foregroundColor: Colors.black),
+                  child: const Text('Salvar material'),
+                ),
+              )
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text('Lista',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        if (items.isEmpty)
+          Text('Nenhum material ainda.',
+              style: TextStyle(color: Colors.white.withOpacity(.7))),
+        ...items.asMap().entries.map((e) {
+          final i = e.key;
+          final it = e.value;
+          return _card(
+            child: Row(
+              children: [
+                Icon(Icons.build, color: AppTheme.gold),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(it.name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(
+                          'Un: ${it.unit} • Preço: R\$ ${it.price.toStringAsFixed(2)}',
+                          style:
+                              TextStyle(color: Colors.white.withOpacity(.7))),
+                    ],
+                  ),
+                ),
+                IconButton(
+                    onPressed: () => _del(i),
+                    icon: const Icon(Icons.delete_outline)),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _field(TextEditingController c, String hint, {bool number = false}) {
+    return TextField(
+      controller: c,
+      keyboardType: number
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : TextInputType.text,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(.45)),
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppTheme.border.withOpacity(.45)),
+        ),
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+      ),
+      child: child,
+    );
+  }
+}

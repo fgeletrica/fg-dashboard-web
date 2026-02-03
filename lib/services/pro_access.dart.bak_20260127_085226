@@ -1,0 +1,80 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
+class ProAccess {
+  static const _keyPro = 'has_pro';
+  static const _keyProDev = 'pro_dev';
+  static const _keyTrialUntilMs = 'trial_until_ms';
+
+  /// PRO “real” (compra / ativação)
+  static Future<bool> hasProAccessNow() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pro = prefs.getBool(_keyPro) ?? false;
+    if (pro) return true;
+
+    // modo dev libera também
+    final dev = prefs.getBool(_keyProDev) ?? false;
+    if (dev) return true;
+
+    // trial ativo também libera
+    final left = await trialRemaining();
+    return left > Duration.zero;
+  }
+
+  /// ===== DEV MODE =====
+  static Future<bool> getProDev() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyProDev) ?? false;
+  }
+
+  static Future<void> setProDev(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyProDev, v);
+  }
+
+  /// ===== TRIAL =====
+  static Future<int?> getTrialUntilMs() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_keyTrialUntilMs);
+  }
+
+  static Future<void> startTrial({required Duration duration}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final until = DateTime.now().add(duration).millisecondsSinceEpoch;
+    await prefs.setInt(_keyTrialUntilMs, until);
+  }
+
+  static Future<void> resetTrial() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyTrialUntilMs);
+  }
+
+  static Future<Duration> trialRemaining() async {
+    final until = await getTrialUntilMs();
+    if (until == null) return Duration.zero;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final diffMs = until - now;
+    if (diffMs <= 0) return Duration.zero;
+    return Duration(milliseconds: diffMs);
+  }
+
+  static String formatDuration(Duration d) {
+    if (d <= Duration.zero) return "0 min";
+    final totalMin = d.inMinutes;
+    final h = totalMin ~/ 60;
+    final m = totalMin % 60;
+    if (h <= 0) return "${m} min";
+    if (m == 0) return "${h} h";
+    return "${h} h ${m} min";
+  }
+
+  /// ===== PRO (compra) =====
+  static Future<void> enablePro() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyPro, true);
+  }
+
+  static Future<void> disablePro() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyPro, false);
+  }
+}

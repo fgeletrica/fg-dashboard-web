@@ -1,0 +1,115 @@
+
+// ✅ Disjuntores padrão (Brasil) — ajuste se quiser
+int pickBreakerA(double ibA) {
+  final std = <int>[2, 4, 6, 10, 13, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100];
+  // regra: sempre acima da corrente (nunca igual)
+  for (final a in std) {
+    if (a > ibA) return a;
+  }
+  return std.last;
+}
+
+class EletricoResult {
+  final double ibA;
+  final double caboMm2;
+  final int izA;
+  final int disjuntorA;
+  final double quedaTensaoPct;
+  final double limiteQvPct;
+
+  const EletricoResult({
+    required this.ibA,
+    required this.caboMm2,
+    required this.izA,
+    required this.disjuntorA,
+    required this.quedaTensaoPct,
+    required this.limiteQvPct,
+  });
+}
+
+class EletricoCalc {
+  // Conservador (referência prática): cobre em eletroduto, 2 condutores carregados, 30°C
+  static const List<_Amp> _ampacidadeCu = [
+    _Amp(1.5, 15),
+    _Amp(2.5, 21),
+    _Amp(4.0, 28),
+    _Amp(6.0, 36),
+    _Amp(10.0, 50),
+    _Amp(16.0, 68),
+    _Amp(25.0, 89),
+    _Amp(35.0, 110),
+    _Amp(50.0, 140),
+    _Amp(70.0, 175),
+    _Amp(95.0, 210),
+  ];
+
+  static const List<int> _disjuntores = [6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200];
+
+  static double correnteIb({required double potW, required double tensaoV}) {
+    if (tensaoV <= 0) return 0;
+    return potW / tensaoV;
+  }
+
+  // Queda de tensão aproximada (monofásico ida+volta)
+  static double quedaTensaoPct({
+    required double ibA,
+    required double distanciaM,
+    required double secaoMm2,
+    required double tensaoV,
+  }) {
+    if (tensaoV <= 0 || secaoMm2 <= 0 || distanciaM <= 0) return 0;
+    const rho = 0.018; // Ω·mm²/m (cobre aprox.)
+    final dv = (2.0 * distanciaM * ibA * rho) / secaoMm2;
+    return (dv / tensaoV) * 100.0;
+  }
+    return _disjuntores.last;
+  }
+
+  static _Amp _escolherCabo({required int disjA, required double ibA, required double distanciaM, required double tensaoV, required double limiteQvPct}) {
+    // Cabo deve suportar o disjuntor (In <= Iz) e a queda ficar <= limite
+    for (final a in _ampacidadeCu) {
+      if (a.izA < disjA) continue;
+      final qv = quedaTensaoPct(ibA: ibA, distanciaM: distanciaM, secaoMm2: a.secaoMm2, tensaoV: tensaoV);
+      if (qv <= limiteQvPct) return a;
+    }
+    // se nada atende queda + disj, devolve o maior
+    return _ampacidadeCu.last;
+  }
+
+  static EletricoResult dimensionar({
+    required double potW,
+    required double tensaoV,
+    required double distanciaM,
+    double limiteQvPct = 4.0,
+  }) {
+    final ib = correnteIb(potW: potW, tensaoV: tensaoV);
+    final disj = pickBreakerA(ib);
+
+    final amp = _escolherCabo(
+      disjA: disj,
+      ibA: ib,
+      distanciaM: distanciaM,
+      tensaoV: tensaoV,
+      limiteQvPct: limiteQvPct,
+    );
+
+    final qv = quedaTensaoPct(ibA: ib, distanciaM: distanciaM, secaoMm2: amp.secaoMm2, tensaoV: tensaoV);
+
+    double r2(double v) => (v * 100).roundToDouble() / 100.0;
+
+    return EletricoResult(
+      ibA: r2(ib),
+      caboMm2: amp.secaoMm2,
+      izA: amp.izA,
+      disjuntorA: disj,
+      quedaTensaoPct: r2(qv),
+      limiteQvPct: limiteQvPct,
+    );
+  }
+}
+
+class _Amp {
+  final double secaoMm2;
+  final int izA;
+  const _Amp(this.secaoMm2, this.izA);
+}

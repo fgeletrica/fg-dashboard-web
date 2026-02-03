@@ -1,0 +1,395 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../services/pro_access.dart';
+import '../services/materials_store.dart';
+
+class MaterialsScreen extends StatefulWidget {
+  const MaterialsScreen({super.key});
+
+  @override
+  State<MaterialsScreen> createState() => _MaterialsScreenState();
+}
+
+class _MaterialsScreenState extends State<MaterialsScreen> {
+  bool loading = true;
+  bool pro = false;
+
+  final _qCtrl = TextEditingController();
+
+  List<MaterialDbItem> items = [];
+  List<MaterialDbItem> filtered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAndLoad();
+    _qCtrl.addListener(_applyFilter);
+  }
+
+  @override
+  void dispose() {
+    _qCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkAndLoad() async {
+    pro = await ProAccess.hasProAccessNow();
+    if (!mounted) return;
+
+    if (!pro) {
+      setState(() => loading = false);
+      return;
+    }
+
+    await MaterialsStore.seedIfEmpty();
+    items = await MaterialsStore.load();
+    filtered = List.of(items);
+
+    if (!mounted) return;
+    setState(() => loading = false);
+  }
+
+  Future<void> _reload() async {
+    items = await MaterialsStore.load();
+    _applyFilter();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _applyFilter() {
+    final q = _qCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) {
+      filtered = List.of(items);
+    } else {
+      filtered = items.where((it) {
+        return it.name.toLowerCase().contains(q) ||
+            it.brand.toLowerCase().contains(q) ||
+            it.unit.toLowerCase().contains(q);
+      }).toList();
+    }
+    if (mounted) setState(() {});
+  }
+
+  double _toDouble(String s) => double.tryParse(s.replaceAll(',', '.').trim()) ?? 0;
+
+  Future<void> _openAdd() async {
+    final created = await _openEditDialog(
+      title: 'Adicionar material',
+      initial: MaterialDbItem(name: '', brand: '', unit: 'un', price: 0, imageUrl: ''),
+      allowDelete: false,
+    );
+    if (created == null) return;
+    await MaterialsStore.add(created);
+    await _reload();
+  }
+
+  Future<void> _openEdit(int indexInFiltered) async {
+    final it = filtered[indexInFiltered];
+    final realIndex = items.indexOf(it);
+    if (realIndex < 0) return;
+
+    final updated = await _openEditDialog(
+      title: 'Editar material',
+      initial: MaterialDbItem(
+        name: it.name,
+        brand: it.brand,
+        unit: it.unit,
+        price: it.price,
+        imageUrl: it.imageUrl,
+      ),
+      allowDelete: true,
+    );
+
+    if (updated == null) return;
+
+    // delete (marcado com name vazio especial)
+    if (updated.name == '__DELETE__') {
+      await MaterialsStore.removeAt(realIndex);
+      await _reload();
+      return;
+    }
+
+    await MaterialsStore.updateAt(realIndex, updated);
+    await _reload();
+  }
+
+  Future<MaterialDbItem?> _openEditDialog({
+    required String title,
+    required MaterialDbItem initial,
+    required bool allowDelete,
+  }) async {
+    final nameCtrl = TextEditingController(text: initial.name);
+    final brandCtrl = TextEditingController(text: initial.brand);
+    final unitCtrl = TextEditingController(text: initial.unit.isEmpty ? 'un' : initial.unit);
+    final priceCtrl = TextEditingController(text: initial.price.toStringAsFixed(2));
+    final imgCtrl = TextEditingController(text: initial.imageUrl);
+
+    InputDecoration dec(String label) => InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(.75), fontWeight: FontWeight.w700),
+          filled: true,
+          fillColor: AppTheme.card,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppTheme.gold.withOpacity(.65))),
+        );
+
+    final res = await showDialog<MaterialDbItem?>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.bg,
+        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(controller: nameCtrl, style: const TextStyle(color: Colors.white), decoration: dec('Nome')),
+              const SizedBox(height: 10),
+              TextField(controller: brandCtrl, style: const TextStyle(color: Colors.white), decoration: dec('Marca (opcional)')),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: unitCtrl,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: dec('Un (m, un, kg...)'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: priceCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: dec('Preço (R\$)'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: imgCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: dec('Foto (URL) — opcional'),
+              ),
+              const SizedBox(height: 10),
+              if (imgCtrl.text.trim().isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.network(
+                    imgCtrl.text.trim(),
+                    height: 120,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 120,
+                      alignment: Alignment.center,
+                      color: AppTheme.card,
+                      child: Text('Não carregou a imagem', style: TextStyle(color: Colors.white.withOpacity(.7))),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          if (allowDelete)
+            TextButton(
+              onPressed: () => Navigator.pop(context, MaterialDbItem(name: '__DELETE__', brand: '', unit: 'un', price: 0)),
+              child: const Text('Apagar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w800)),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: Text('Cancelar', style: TextStyle(color: Colors.white.withOpacity(.8), fontWeight: FontWeight.w800)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.gold, foregroundColor: Colors.black),
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final unit = unitCtrl.text.trim().isEmpty ? 'un' : unitCtrl.text.trim();
+              final brand = brandCtrl.text.trim();
+              final price = _toDouble(priceCtrl.text);
+              final img = imgCtrl.text.trim();
+              Navigator.pop(context, MaterialDbItem(name: name, brand: brand, unit: unit, price: price, imageUrl: img));
+            },
+            child: const Text('Salvar', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+
+    nameCtrl.dispose();
+    brandCtrl.dispose();
+    unitCtrl.dispose();
+    priceCtrl.dispose();
+    imgCtrl.dispose();
+
+    return res;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Meus Materiais (PRO)'),
+      ),
+      floatingActionButton: pro
+          ? FloatingActionButton(
+              backgroundColor: AppTheme.gold,
+              foregroundColor: Colors.black,
+              onPressed: _openAdd,
+              child: const Icon(Icons.add),
+            )
+          : null,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : (!pro ? _locked(context) : _content()),
+    );
+  }
+
+  Widget _locked(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.border.withOpacity(.35)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock, color: AppTheme.gold, size: 36),
+            const SizedBox(height: 10),
+            const Text('Recurso PRO', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
+            const SizedBox(height: 6),
+            Text('Ative o PRO para usar Meus Materiais.', style: TextStyle(color: Colors.white.withOpacity(.7))),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.gold,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+                child: const Text('Ver planos', style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _content() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          controller: _qCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Pesquisar em Materiais...',
+            hintStyle: TextStyle(color: Colors.white.withOpacity(.45)),
+            prefixIcon: Icon(Icons.search, color: AppTheme.gold.withOpacity(.9)),
+            filled: true,
+            fillColor: AppTheme.card,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.border.withOpacity(.45)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.gold.withOpacity(.65)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (filtered.isEmpty)
+          Text('Nenhum material encontrado.', style: TextStyle(color: Colors.white.withOpacity(.7))),
+        ...filtered.asMap().entries.map((e) {
+          final idx = e.key;
+          final it = e.value;
+          return GestureDetector(
+            onTap: () => _openEdit(idx),
+            child: _card(
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: it.imageUrl.trim().isEmpty
+                        ? Container(
+                            width: 72,
+                            height: 72,
+                            color: AppTheme.card,
+                            child: Icon(Icons.construction, color: AppTheme.gold.withOpacity(.9)),
+                          )
+                        : Image.network(
+                            it.imageUrl.trim(),
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 72,
+                              height: 72,
+                              color: AppTheme.card,
+                              child: Icon(Icons.broken_image, color: Colors.white.withOpacity(.6)),
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(it.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 4),
+                        Text(
+                          (it.brand.trim().isEmpty ? '—' : it.brand.trim()),
+                          style: TextStyle(color: Colors.white.withOpacity(.7), fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('R\$ ${it.price.toStringAsFixed(2)}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 2),
+                      Text(it.unit, style: TextStyle(color: Colors.white.withOpacity(.65), fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 90),
+      ],
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+      ),
+      child: child,
+    );
+  }
+}

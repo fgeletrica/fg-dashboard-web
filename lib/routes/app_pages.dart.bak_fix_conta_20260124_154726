@@ -1,0 +1,10 @@
+class AppRoutes {
+  static const home = '/';
+  static const agenda = '/agenda';
+  static const calc = '/calc';
+  static const orcamentos = '/orcamentos';
+  static const ferramentas = '/ferramentas';
+  static const tutoriais = '/tutoriais';
+  static const conta = '/conta';
+  static const paywall = '/paywall';
+}

@@ -1,0 +1,30 @@
+import 'package:flutter/material.dart';
+
+import 'screens/app_entry.dart';
+import 'routes/app_pages.dart';
+import 'routes/app_routes.dart';
+void main() {
+  runApp(const MeuAjudanteApp());
+}
+
+class MeuAjudanteApp extends StatelessWidget {
+  const MeuAjudanteApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: const AppEntry(),
+debugShowCheckedModeBanner: false,
+      title: 'FG Elétrica',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0E141E),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0E141E),
+          foregroundColor: Colors.white,
+        ),
+      ),
+      routes: AppPages.routes,
+    );
+  }
+}

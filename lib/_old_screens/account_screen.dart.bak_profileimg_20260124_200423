@@ -1,0 +1,603 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../services/pro_access.dart';
+import '../services/profile_store.dart';
+
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({super.key});
+
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  final _company = TextEditingController();
+
+  final _bio = TextEditingController();
+
+  String _level = 'Iniciante';
+  String _specialty = 'Autônomo';
+  double _radiusKm = 1.0;
+  bool _showRadius = true;
+
+  String _avatarB64 = '';
+  String _logoB64 = '';
+
+  bool _loading = true;
+  bool _hasPro = false;
+  bool _termsAccepted = false;
+
+  static const _kTerms = 'terms_accepted_v1';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _company.dispose();
+    _bio.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+
+    final p = await ProfileStore.get();
+    final pro = await ProAccess.hasProAccessNow();
+    final sp = await SharedPreferences.getInstance();
+    final terms = sp.getBool(_kTerms) ?? false;
+
+    _name.text = p.name;
+    _phone.text = p.phone;
+    _email.text = p.email;
+    _company.text = p.company;
+
+    _bio.text = p.bio;
+    _level = p.level;
+    _specialty = p.specialty;
+    _radiusKm = p.radiusKm;
+    _showRadius = p.showRadius;
+
+    _avatarB64 = p.avatarB64;
+    _logoB64 = p.logoB64;
+
+    if (!mounted) return;
+    setState(() {
+      _hasPro = pro;
+      _termsAccepted = terms;
+      _loading = false;
+    });
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Você precisa aceitar o termo para continuar.')),
+      );
+      return;
+    }
+
+    await ProfileStore.set(
+      name: _name.text,
+      phone: _phone.text,
+      email: _email.text,
+      company: _company.text,
+      bio: _bio.text,
+      level: _level,
+      specialty: _specialty,
+      radiusKm: _radiusKm,
+      showRadius: _showRadius,
+      avatarB64: _avatarB64,
+      logoB64: _logoB64,
+    );
+
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kTerms, _termsAccepted);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Conta salva ✅')),
+    );
+  }
+
+  Future<void> _openPaywall() async {
+    await Navigator.of(context).pushNamed(AppRoutes.paywall);
+    await _load();
+  }
+
+  Uint8List? _b64ToBytes(String b64) {
+    if (b64.trim().isEmpty) return null;
+    try {
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _pickImage({required bool isLogo}) async {
+    final picker = ImagePicker();
+    final x = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (x == null) return;
+
+    final bytes = await x.readAsBytes();
+    final b64 = base64Encode(bytes);
+
+    setState(() {
+      if (isLogo) {
+        _logoB64 = b64;
+      } else {
+        _avatarB64 = b64;
+      }
+    });
+
+    await _save();
+  }
+
+  Future<void> _exportBackup() async {
+    final p = await ProfileStore.get();
+    final data = {
+      "type": "fg_eletrica_backup_v1",
+      "exportedAt": DateTime.now().toIso8601String(),
+      "profile": {
+        "name": p.name,
+        "phone": p.phone,
+        "email": p.email,
+        "company": p.company,
+        "level": p.level,
+        "specialty": p.specialty,
+        "radiusKm": p.radiusKm,
+        "showRadius": p.showRadius,
+        "bio": p.bio,
+        "avatarB64": p.avatarB64,
+        "logoB64": p.logoB64,
+      }
+    };
+
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(data);
+    final bytes = Uint8List.fromList(utf8.encode(jsonStr));
+
+    final x = XFile.fromData(
+      bytes,
+      name: 'fg_eletrica_backup_profile.json',
+      mimeType: 'application/json',
+    );
+
+    await Share.shareXFiles([x], text: 'Backup do perfil (FG Elétrica)');
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(.75), fontWeight: FontWeight.w700),
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(.12)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppTheme.gold.withOpacity(.65)),
+        ),
+      );
+
+  Widget _chip(String t) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.06),
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(color: Colors.white.withOpacity(.12)),
+        ),
+        child: Text(t, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarBytes = _b64ToBytes(_avatarB64);
+    final logoBytes = _b64ToBytes(_logoB64);
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Minha Conta'),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar backup',
+            onPressed: _exportBackup,
+            icon: const Icon(Icons.cloud_download_outlined),
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // --- HEADER estilo "cartão" ---
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.card,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withOpacity(.12)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          // Avatar
+                          Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 38,
+                                backgroundColor: Colors.white.withOpacity(.08),
+                                backgroundImage: avatarBytes == null ? null : MemoryImage(avatarBytes),
+                                child: avatarBytes == null
+                                    ? Icon(Icons.person, color: AppTheme.gold, size: 42)
+                                    : null,
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: InkWell(
+                                  onTap: () => _pickImage(isLogo: false),
+                                  borderRadius: BorderRadius.circular(99),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(7),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.gold,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.black.withOpacity(.2)),
+                                    ),
+                                    child: const Icon(Icons.edit, size: 16, color: Colors.black),
+                                  ),
+                                ),
+                              )
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _name.text.trim().isEmpty ? 'Seu nome' : _name.text.trim(),
+                                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _specialty,
+                                  style: TextStyle(color: Colors.white.withOpacity(.75), fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _chip(_level),
+                                    if (_showRadius) _chip('Raio: ${_radiusKm.toStringAsFixed(0)} km'),
+                                    _chip(_hasPro ? 'PRO' : 'FREE'),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                // só dá uma rolada pra baixo (usuário edita os campos)
+                                Scrollable.ensureVisible(
+                                  _formKey.currentContext ?? context,
+                                  duration: const Duration(milliseconds: 250),
+                                );
+                              },
+                              icon: const Icon(Icons.edit_note),
+                              label: const Text('Editar', style: TextStyle(fontWeight: FontWeight.w900)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.gold,
+                                foregroundColor: Colors.black,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Capa (em breve). Já deixei o layout pronto.')),
+                                );
+                              },
+                              icon: const Icon(Icons.photo_camera_outlined),
+                              label: const Text('Editar Capa', style: TextStyle(fontWeight: FontWeight.w900)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: BorderSide(color: Colors.white.withOpacity(.18)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Logo da empresa
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withOpacity(.12)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white.withOpacity(.12)),
+                              ),
+                              child: logoBytes == null
+                                  ? Icon(Icons.apartment, color: AppTheme.gold)
+                                  : ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.memory(logoBytes, fit: BoxFit.cover),
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _company.text.trim().isEmpty ? 'Empresa' : _company.text.trim(),
+                                    style: const TextStyle(fontWeight: FontWeight.w900),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _hasPro
+                                        ? 'Se você for PRO, sua logo pode aparecer no topo do PDF.'
+                                        : 'A logo no PDF é recurso PRO.',
+                                    style: TextStyle(color: Colors.white.withOpacity(.7)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: () async {
+                                if (!_hasPro) {
+                                  await _openPaywall();
+                                  return;
+                                }
+                                await _pickImage(isLogo: true);
+                              },
+                              child: Text(
+                                _hasPro ? 'Trocar' : 'PRO',
+                                style: TextStyle(color: AppTheme.gold, fontWeight: FontWeight.w900),
+                              ),
+                            )
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Sobre (bio)
+                      Text('Sobre', style: TextStyle(color: Colors.white.withOpacity(.9), fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withOpacity(.12)),
+                        ),
+                        child: Text(
+                          _bio.text.trim().isEmpty
+                              ? 'Você ainda não tem nenhuma apresentação sobre você.'
+                              : _bio.text.trim(),
+                          style: TextStyle(color: Colors.white.withOpacity(.85), height: 1.25, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                // --- FORMULÁRIO (dados) ---
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _name,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe seu nome' : null,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _dec('Nome e sobrenome'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _company,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe a empresa (ou coloque —)' : null,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _dec('Empresa'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _phone,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _dec('Telefone (opcional)'),
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _email,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _dec('E-mail (opcional)'),
+                      ),
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        value: _specialty,
+                        decoration: _dec('Especialidade'),
+                        dropdownColor: AppTheme.card,
+                        items: const [
+                          DropdownMenuItem(value: 'Autônomo', child: Text('Autônomo')),
+                          DropdownMenuItem(value: 'Residencial', child: Text('Residencial')),
+                          DropdownMenuItem(value: 'Predial', child: Text('Predial')),
+                          DropdownMenuItem(value: 'Comercial', child: Text('Comercial')),
+                          DropdownMenuItem(value: 'Industrial', child: Text('Industrial')),
+                        ],
+                        onChanged: (v) => setState(() => _specialty = v ?? 'Autônomo'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        value: _level,
+                        decoration: _dec('Nível'),
+                        dropdownColor: AppTheme.card,
+                        items: const [
+                          DropdownMenuItem(value: 'Iniciante', child: Text('Iniciante')),
+                          DropdownMenuItem(value: 'Intermediário', child: Text('Intermediário')),
+                          DropdownMenuItem(value: 'Avançado', child: Text('Avançado')),
+                        ],
+                        onChanged: (v) => setState(() => _level = v ?? 'Iniciante'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: _radiusKm.toStringAsFixed(0),
+                              keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _dec('Raio de atuação (km)'),
+                              onChanged: (v) {
+                                final n = double.tryParse(v.trim().replaceAll(',', '.'));
+                                setState(() => _radiusKm = (n == null || n <= 0) ? 1.0 : n);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SwitchListTile(
+                              value: _showRadius,
+                              onChanged: (v) => setState(() => _showRadius = v),
+                              title: const Text('Mostrar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                              subtitle: Text('no cartão', style: TextStyle(color: Colors.white.withOpacity(.65))),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _bio,
+                        maxLines: 4,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _dec('Mini “Sobre” (aparece no perfil e no PDF)'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      CheckboxListTile(
+                        value: _termsAccepted,
+                        onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+                        title: const Text('Li e aceito o termo de uso'),
+                        subtitle: Text(
+                          'O app ajuda no dimensionamento, mas não substitui projeto/ART.',
+                          style: TextStyle(color: Colors.white.withOpacity(.70)),
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      SizedBox(
+                        height: 52,
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _save,
+                          icon: const Icon(Icons.save),
+                          label: const Text('Salvar todos os dados', style: TextStyle(fontWeight: FontWeight.w900)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.gold,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      OutlinedButton.icon(
+                        onPressed: _exportBackup,
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                        icon: const Icon(Icons.cloud_download_outlined),
+                        label: const Text('Exportar meus dados (JSON)'),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      OutlinedButton(
+                        onPressed: _openPaywall,
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white70),
+                        child: Text(_hasPro ? 'Gerenciar PRO' : 'Ativar PRO'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}

@@ -1,0 +1,24 @@
+import '../models/budget_models.dart';
+
+class BudgetTemplates {
+  static BudgetDoc obraPadrao() {
+    return BudgetDoc(
+      title: 'Orçamento – Obra padrão',
+      services: [
+        BudgetServiceLine(name: 'Pontos elétricos', price: 1200),
+        BudgetServiceLine(name: 'Quadro de disjuntores', price: 800),
+        BudgetServiceLine(name: 'Aterramento', price: 600),
+      ],
+    );
+  }
+
+  static BudgetDoc manutencao() {
+    return BudgetDoc(
+      title: 'Orçamento – Manutenção',
+      services: [
+        BudgetServiceLine(name: 'Troca de tomadas', price: 150),
+        BudgetServiceLine(name: 'Revisão elétrica', price: 250),
+      ],
+    );
+  }
+}

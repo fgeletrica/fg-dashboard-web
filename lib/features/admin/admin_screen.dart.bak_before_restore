@@ -1,0 +1,294 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../services/pro_access.dart';
+
+class AdminScreen extends StatefulWidget {
+  const AdminScreen({super.key});
+
+  @override
+  State<AdminScreen> createState() => _AdminScreenState();
+}
+
+class _AdminScreenState extends State<AdminScreen> {
+  // ----------------- KEYS (mantém compatível com o que você já usa) -----------------
+  static const _kAdminAuthed = 'admin_authed_v1';
+  static const _kAdminPass = 'admin_pass_v1';
+
+  static const _kCupomEnabled = 'cupom_enabled_v1';
+  static const _kCupomCode = 'cupom_code_v1';
+  static const _kCupomPct = 'cupom_pct_v1';
+  static const _kCupomEndAtMs = 'cupom_endat_ms_v1'; // NOVO: expiração do cupom
+
+  static const _kHomeNotice = 'home_notice_v1'; // HomeScreen já usa isso
+
+  static const _kLinksWhats = 'links_whats_v1';
+  static const _kLinksInsta = 'links_insta_v1';
+  static const _kLinksFace = 'links_face_v1';
+
+  static const _kPartnersJson = 'partners_json_v1';
+  static const _kServicePricesJson = 'service_prices_json_v1';
+
+  // ----------------- SENHA -----------------
+  bool _loadingAuth = true;
+  bool _authed = false;
+
+  final _passCtrl = TextEditingController();
+  final _newPassCtrl = TextEditingController();
+
+  // ----------------- CUPOM -----------------
+  bool _cupomEnabled = false;
+  final _cupomCodeCtrl = TextEditingController(text: 'FG10');
+  final _cupomPctCtrl = TextEditingController(text: '10');
+  final _cupomDaysCtrl = TextEditingController(text: '7');
+  int? _cupomEndAtMs; // ms epoch
+
+  // ----------------- AVISO HOME -----------------
+  final _noticeCtrl = TextEditingController();
+
+  // ----------------- LINKS -----------------
+  final _whatsCtrl = TextEditingController();
+  final _instaCtrl = TextEditingController();
+  final _faceCtrl = TextEditingController();
+
+  // ----------------- PARCEIROS -----------------
+  final _partnerNameCtrl = TextEditingController();
+  final _partnerUrlCtrl = TextEditingController();
+  final _partnerDiscountCtrl = TextEditingController(text: '10');
+  List<Map<String, dynamic>> _partners = [];
+
+  // ----------------- PREÇOS DE SERVIÇOS (Admin) -----------------
+  final _svcNameCtrl = TextEditingController();
+  final _svcPriceCtrl = TextEditingController();
+  final _svcNotesCtrl = TextEditingController();
+  List<Map<String, dynamic>> _servicePrices = [];
+
+  // UI
+  static const _bg = Color(0xFF0E1116);
+  static const _card = Color(0xFF141A22);
+  static const _border = Color(0xFF2B2F3A);
+  static const _gold = Color(0xFFFFC857);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  @override
+  void dispose() {
+    _passCtrl.dispose();
+    _newPassCtrl.dispose();
+
+    _cupomCodeCtrl.dispose();
+    _cupomPctCtrl.dispose();
+    _cupomDaysCtrl.dispose();
+
+    _noticeCtrl.dispose();
+
+    _whatsCtrl.dispose();
+    _instaCtrl.dispose();
+    _faceCtrl.dispose();
+
+    _partnerNameCtrl.dispose();
+    _partnerUrlCtrl.dispose();
+    _partnerDiscountCtrl.dispose();
+
+    _svcNameCtrl.dispose();
+    _svcPriceCtrl.dispose();
+    _svcNotesCtrl.dispose();
+
+    super.dispose();
+  }
+
+  Future<void> _loadAll() async {
+    final sp = await SharedPreferences.getInstance();
+
+    // senha
+    final pass = (sp.getString(_kAdminPass) ?? '').trim();
+    if (pass.isEmpty) {
+      // se nunca setou, cria padrão
+      await sp.setString(_kAdminPass, '2468');
+    }
+    final ok = sp.getBool(_kAdminAuthed) ?? false;
+
+    // cupom
+    _cupomEnabled = sp.getBool(_kCupomEnabled) ?? false;
+    _cupomCodeCtrl.text = (sp.getString(_kCupomCode) ?? 'FG10').trim();
+    _cupomPctCtrl.text = (sp.getString(_kCupomPct) ?? '10').trim();
+    _cupomEndAtMs = sp.getInt(_kCupomEndAtMs);
+
+    // aviso
+    _noticeCtrl.text = (sp.getString(_kHomeNotice) ?? '').trim();
+
+    // links
+    _whatsCtrl.text = (sp.getString(_kLinksWhats) ?? '').trim();
+    _instaCtrl.text = (sp.getString(_kLinksInsta) ?? '').trim();
+    _faceCtrl.text = (sp.getString(_kLinksFace) ?? '').trim();
+
+    // parceiros
+    _partners = _decodeListMap(sp.getString(_kPartnersJson)) ?? [];
+
+    // serviços
+    _servicePrices = _decodeListMap(sp.getString(_kServicePricesJson)) ?? _seedServicePrices();
+
+    if (!mounted) return;
+    setState(() {
+      _authed = ok;
+      _loadingAuth = false;
+    });
+  }
+
+  List<Map<String, dynamic>>? _decodeListMap(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final j = jsonDecode(raw);
+      if (j is List) {
+        return j.map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v))).toList();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: _card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+
+  Widget _box({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _border),
+      ),
+      child: child,
+    );
+  }
+
+  // ----------------- AUTH -----------------
+  Future<void> _login() async {
+    final sp = await SharedPreferences.getInstance();
+    final saved = (sp.getString(_kAdminPass) ?? '2468').trim();
+    final typed = _passCtrl.text.trim();
+
+    if (typed == saved) {
+      await sp.setBool(_kAdminAuthed, true);
+      if (!mounted) return;
+      setState(() => _authed = true);
+      _snack('Admin liberado ✅');
+      return;
+    }
+
+    _snack('Senha incorreta ❌');
+  }
+
+  Future<void> _logout() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kAdminAuthed, false);
+    if (!mounted) return;
+    setState(() => _authed = false);
+    _snack('Admin bloqueado ✅');
+  }
+
+  Future<void> _setPassword() async {
+    final v = _newPassCtrl.text.trim();
+    if (v.length < 4) {
+      _snack('Senha muito curta (mín 4).');
+      return;
+    }
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_kAdminPass, v);
+    _newPassCtrl.clear();
+    _snack('Senha alterada ✅');
+  }
+
+  Future<void> _resetPassword1234() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_kAdminPass, '1234');
+    _snack('Senha resetada para 1234 ✅');
+  }
+
+  // ----------------- CUPOM -----------------
+  int? _calcEndAtFromDays() {
+    final days = int.tryParse(_cupomDaysCtrl.text.trim());
+    if (days == null || days <= 0) return null;
+    final ms = DateTime.now().add(Duration(days: days)).millisecondsSinceEpoch;
+    return ms;
+  }
+
+  String _fmtLeft(int msLeft) {
+    if (msLeft <= 0) return 'expirado';
+    final s = (msLeft / 1000).floor();
+    final d = s ~/ 86400;
+    final h = (s % 86400) ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    return '${d}d ${h}h ${m}m';
+  }
+
+  
+  Future<void> _expireCupomNow() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool('cupom_enabled_v1', false);
+    await sp.remove('cupom_endat_ms_v1');
+    if (!mounted) return;
+    setState(() {
+      _cupomEndAtMs = null;
+    });
+    _snack('Cupom expirado agora ✅');
+  }
+
+Future<void> _saveCupom() async {
+    final sp = await SharedPreferences.getInstance();
+    final code = _cupomCodeCtrl.text.trim();
+    final pct = _cupomPctCtrl.text.trim();
+
+    // endAt: se já existe, mantém; se não existe e usuário informou dias, cria
+    final days = int.tryParse(_cupomDaysCtrl.text.trim());
+    // Se o usuário preencheu dias válidos, isso SOBRESCREVE a expiração (set manual)
+    if (days != null && days > 0) {
+      _cupomEndAtMs = DateTime.now().add(Duration(days: days)).millisecondsSinceEpoch;
+    }
+
+    await sp.setBool(_kCupomEnabled, _cupomEnabled);
+    await sp.setString(_kCupomCode, code);
+    await sp.setString(_kCupomPct, pct);
+    if (_cupomEndAtMs != null) {
+      await sp.setInt(_kCupomEndAtMs, _cupomEndAtMs!);
+    } else {
+      await sp.remove(_kCupomEndAtMs);
+    }
+
+    _snack('Cupom salvo ✅');
+    setState(() {});
+  }
+
+  Future<void> _clearCupom() async {
+    final sp = await SharedPreferences.getInstance();
+    _cupomEnabled = false;
+    _cupomEndAtMs = null;
+    await sp.setBool(_kCupomEnabled, false);
+    await sp.remove(_kCupomEndAtMs);
+    _snack('Cupom desativado ✅');
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _extendCupomDays(int days) async {
+    _cupomDaysCtrl.text = days.toString();
+    _cupomEndAtMs = DateTime.now().add(Duration(days: days)).millisecondsSinceEpoch;
+    await _saveCupom();
+    if (!mounted) return;
+    setState(() {});
+  }

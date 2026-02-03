@@ -1,0 +1,126 @@
+import 'package:flutter/material.dart';
+import '../models/material_item.dart';
+import '../utils/number_input.dart';
+
+class MaterialsScreen extends StatefulWidget {
+  const MaterialsScreen({super.key});
+
+  @override
+  State<MaterialsScreen> createState() => _MaterialsScreenState();
+}
+
+class _MaterialsScreenState extends State<MaterialsScreen> {
+  final List<MaterialItem> _items = [];
+
+  final _nameCtrl = TextEditingController();
+  final _qtyCtrl = TextEditingController(text: '1');
+  final _priceCtrl = TextEditingController();
+  String _unit = 'm';
+
+  double get totalGeral =>
+      _items.fold(0.0, (sum, i) => sum + i.total);
+
+  void _addItem() {
+    final nome = _nameCtrl.text.trim();
+    final qtd = double.tryParse(_qtyCtrl.text) ?? 0;
+    final preco = double.tryParse(_priceCtrl.text) ?? 0;
+
+    if (nome.isEmpty || qtd <= 0 || preco <= 0) return;
+
+    setState(() {
+      _items.add(MaterialItem(
+        nome: nome,
+        quantidade: qtd,
+        unidade: _unit,
+        precoUnitario: preco,
+      ));
+    });
+
+    _nameCtrl.clear();
+    _qtyCtrl.text = '1';
+    _priceCtrl.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Materiais')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Material'),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _qtyCtrl,
+                        inputFormatters: [numberInputFormatter],
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Quantidade'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButton<String>(
+                      value: _unit,
+                      items: const [
+                        DropdownMenuItem(value: 'm', child: Text('metro')),
+                        DropdownMenuItem(value: 'un', child: Text('unidade')),
+                      ],
+                      onChanged: (v) => setState(() => _unit = v!),
+                    ),
+                  ],
+                ),
+                TextField(
+                  controller: _priceCtrl,
+                  inputFormatters: [numberInputFormatter],
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Preço unitário'),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _addItem,
+                    child: const Text('Adicionar material'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _items.length,
+              itemBuilder: (_, i) {
+                final it = _items[i];
+                return ListTile(
+                  title: Text(it.nome),
+                  subtitle: Text(
+                    '${it.quantidade} ${it.unidade} × ${it.precoUnitario.toStringAsFixed(2)}',
+                  ),
+                  trailing: Text(
+                    'R\$ ${it.total.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Total materiais: R\$ ${totalGeral.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

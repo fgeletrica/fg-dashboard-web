@@ -1,0 +1,140 @@
+import 'package:flutter/material.dart';
+import "../routes/app_routes.dart";
+import '../services/local_store.dart';
+import '../theme/app_theme.dart';
+
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({super.key});
+
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  bool _loading = true;
+  bool _isPro = false;
+
+  String _company = 'FG Elétrica';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final pro = await LocalStore.isPro();
+
+    // se você tiver perfil salvo no LocalStore, pode ler aqui.
+    // Mantive empresa default, pra não quebrar teu projeto.
+    if (!mounted) return;
+    setState(() {
+      _isPro = pro;
+      _loading = false;
+    });
+  }
+
+  Future<void> _openPaywall() async {
+    final activated = await Navigator.pushNamed(context, '/paywall');
+    if (!mounted) return;
+
+    // ✅ se o paywall retornou true, recarrega e atualiza UI
+    if (activated == true) {
+      final pro = await LocalStore.isPro();
+      if (!mounted) return;
+      setState(() {
+        _isPro = pro;
+      });
+    }
+  }
+
+  Future<void> _deactivateProDevOnly() async {
+    // botão escondido (DEV): segurar pressionado no "Plano" pra resetar
+    await LocalStore.setPro(false);
+    if (!mounted) return;
+    setState(() => _isPro = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('PRO desativado (DEV)')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Minha Conta'),
+        leading: const BackButton(),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Empresa: $_company',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onLongPress: _deactivateProDevOnly, // DEV reset
+                    child: Text(
+                      'Plano: ${_isPro ? "PRO" : "Gratuito"}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _isPro ? AppTheme.gold : Colors.white70,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (!_isPro)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _openPaywall,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.gold,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Ativar PRO',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border:
+                            Border.all(color: AppTheme.gold.withOpacity(.35)),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'PRO ativo ✅',
+                          style: TextStyle(
+                            color: AppTheme.gold,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  Text(
+                    'Dica: segure pressionado em "Plano:" para resetar PRO (DEV).',
+                    style: TextStyle(color: AppTheme.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}

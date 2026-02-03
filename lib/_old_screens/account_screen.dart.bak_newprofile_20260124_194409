@@ -1,0 +1,215 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../routes/app_routes.dart';
+import '../services/profile_store.dart';
+import '../services/pro_access.dart';
+import '../core/app_theme.dart';
+
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({super.key});
+
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  final _company = TextEditingController();
+
+  bool _loading = true;
+  bool _hasPro = false;
+  bool _termsAccepted = false;
+
+  static const _kTerms = 'terms_accepted_v1';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _company.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+
+    final p = await ProfileStore.get();
+    final pro = await ProAccess.hasProAccessNow();
+    final sp = await SharedPreferences.getInstance();
+    final terms = sp.getBool(_kTerms) ?? false;
+
+    _name.text = p.name;
+    _phone.text = p.phone;
+    _email.text = p.email;
+    _company.text = p.company;
+
+    if (!mounted) return;
+    setState(() {
+      _hasPro = pro;
+      _termsAccepted = terms;
+      _loading = false;
+    });
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Você precisa aceitar o termo para continuar.')),
+      );
+      return;
+    }
+
+    await ProfileStore.set(
+      name: _name.text,
+      phone: _phone.text,
+      email: _email.text,
+      company: _company.text,
+    );
+
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kTerms, _termsAccepted);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Conta salva ✅')),
+    );
+  }
+
+  Future<void> _openPaywall() async {
+    await Navigator.of(context).pushNamed(AppRoutes.paywall);
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Conta'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundColor: AppTheme.gold.withOpacity(.18),
+                          child: Icon(Icons.person, color: AppTheme.gold),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _company.text.trim().isEmpty ? 'FG Elétrica' : _company.text.trim(),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _hasPro ? AppTheme.gold.withOpacity(.16) : Colors.white.withOpacity(.08),
+                            borderRadius: BorderRadius.circular(99),
+                            border: Border.all(color: (_hasPro ? AppTheme.gold : Colors.white70).withOpacity(.35)),
+                          ),
+                          child: Text(
+                            _hasPro ? 'PRO' : 'FREE',
+                            style: TextStyle(
+                              color: _hasPro ? AppTheme.gold : Colors.white70,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    _field(_name, 'Seu nome', validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe seu nome' : null),
+                    const SizedBox(height: 12),
+                    _field(_company, 'Empresa', validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe a empresa' : null),
+                    const SizedBox(height: 12),
+                    _field(_phone, 'Telefone (opcional)'),
+                    const SizedBox(height: 12),
+                    _field(_email, 'E-mail (opcional)'),
+
+                    const SizedBox(height: 12),
+
+                    CheckboxListTile(
+                      value: _termsAccepted,
+                      onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+                      title: const Text('Li e aceito o termo de uso'),
+                      subtitle: Text(
+                        'O app ajuda no dimensionamento, mas não substitui projeto/ART.',
+                        style: TextStyle(color: Colors.white.withOpacity(.70)),
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    FilledButton.icon(
+                      onPressed: _save,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Salvar'),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    if (!_hasPro)
+                      OutlinedButton(
+                        onPressed: _openPaywall,
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                        child: const Text('Ativar PRO'),
+                      )
+                    else
+                      OutlinedButton(
+                        onPressed: _openPaywall,
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white70),
+                        child: const Text('Gerenciar PRO'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _field(TextEditingController c, String label, {String? Function(String?)? validator}) {
+    return TextFormField(
+      controller: c,
+      validator: validator,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(.75), fontWeight: FontWeight.w700),
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.35))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.35))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppTheme.gold.withOpacity(.65))),
+      ),
+    );
+  }
+}

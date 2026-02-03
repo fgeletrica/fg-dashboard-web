@@ -1,0 +1,219 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+
+class TutoriaisScreen extends StatelessWidget {
+  const TutoriaisScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/logo.png',
+                width: 26,
+                height: 26,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.bolt, color: AppTheme.gold, size: 20),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text('Tutoriais e Dicas'),
+          ],
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _intro(),
+          const SizedBox(height: 12),
+
+          _section(
+            title: 'Como usar o app (fluxo rápido)',
+            items: const [
+              '1) Equipamentos: toque em um item para preencher potência/tensão automaticamente.',
+              '2) Cálculo Elétrico: preencha Potência, Tensão e Distância (o resto é opcional).',
+              '3) Orçamento: adicione serviços/materiais, aplique margem e gere PDF.',
+              '4) PDF: no FREE sai com marca d’água. No PRO sai limpo.',
+              '5) Tutoriais: use esta tela para entender cada conceito técnico.',
+            ],
+          ),
+
+          _section(
+            title: 'Cálculo Elétrico (como usar)',
+            items: const [
+              'Obrigatório: Potência (W), Tensão (127/220) e Distância (m).',
+              'O app calcula Ib (corrente) e sugere cabo + disjuntor.',
+              'Se a queda de tensão ficar acima do limite, o app aumenta a seção do cabo.',
+              'Opcional: FP e rendimento (η) — útil para motores e ar-condicionado.',
+            ],
+          ),
+
+          _section(
+            title: 'O que significa cada resultado',
+            items: const [
+              'Ib: corrente do circuito (A).',
+              'Cabo (mm²): seção sugerida para suportar corrente e queda de tensão.',
+              'Iz: capacidade de condução do cabo (referência).',
+              'Disjuntor (A): proteção do circuito (deve ser compatível com o cabo).',
+              'Queda de tensão (%): perda aproximada até a carga.',
+            ],
+          ),
+
+          _section(
+            title: 'DPS (Dispositivo de Proteção contra Surtos)',
+            items: const [
+              'Protege contra surtos (raios indiretos, manobras na rede).',
+              'Onde instalar: no QDC/entrada, o mais próximo possível do barramento.',
+              'Precisa de aterramento bom: DPS sem terra “não trabalha direito”.',
+              'DPS ideal: Classe I (entrada/raio direto quando aplicável), Classe II (quadros), Classe III (próximo ao equipamento).',
+              'Use disjuntor/fusível de proteção do DPS conforme fabricante.',
+              'Condutores do DPS curtos e diretos (evitar laços).',
+            ],
+          ),
+
+          _section(
+            title: 'DR (Dispositivo Diferencial Residual)',
+            items: const [
+              'Protege pessoas contra choque (fuga de corrente).',
+              'O mais comum residencial: 30 mA.',
+              'Instalação típica: após o disjuntor geral, alimentando circuitos.',
+              'Evite misturar neutros depois do DR (neutros devem ser separados por DR).',
+              'DR pode desarmar por fuga real, umidade, equipamentos defeituosos ou neutro compartilhado.',
+              'DR não substitui disjuntor: DR é proteção diferencial, disjuntor é sobrecorrente/curto.',
+            ],
+          ),
+
+          _section(
+            title: 'Aterramento (o básico que funciona)',
+            items: const [
+              'Objetivo: segurança (choque) + melhor desempenho de DPS/DR.',
+              'Use haste(s) + condutor de aterramento + barramento de terra.',
+              'Conexões firmes e protegidas contra corrosão.',
+              'Quanto menor a resistência de terra, melhor (especialmente para DPS).',
+              'Interligue massas metálicas e carcaças ao terra.',
+              'Sistema TT/TN: regras mudam; sempre seguir norma local e padrão da concessionária quando aplicável.',
+            ],
+          ),
+
+          _section(
+            title: 'Disjuntor: curva B, C, D (resumo prático)',
+            items: const [
+              'Curva B: cargas resistivas/iluminação (desarma mais “rápido”).',
+              'Curva C: uso geral (tomadas, cargas comuns) — a mais usada.',
+              'Curva D: motores/cargas com alta corrente de partida (evita disparo na partida).',
+              'Dimensionamento: não é só “corrente”. Tem cabo (Iz), método de instalação e curto-circuito.',
+            ],
+          ),
+
+          _section(
+            title: 'Bitola do cabo: por que não é só “corrente”',
+            items: const [
+              'Além da corrente, tem: queda de tensão, aquecimento, agrupamento, temperatura e método de instalação.',
+              'Distância grande → queda de tensão aumenta → cabo pode subir.',
+              'Vários cabos juntos em eletroduto → reduz capacidade (derating).',
+              'O app usa regra prática; em casos críticos, faça projeto detalhado.',
+            ],
+          ),
+
+          _section(
+            title: 'Queda de tensão (dica prática)',
+            items: const [
+              'Quanto maior a distância e corrente, maior a queda.',
+              'Iluminação e tomadas: costuma-se trabalhar com limites baixos.',
+              'Motores/ar: queda alta pode prejudicar partida e vida útil.',
+              'Se a queda “estourar”, aumente a seção do cabo ou reduza o comprimento do circuito.',
+            ],
+          ),
+
+          _section(
+            title: 'Equipamentos (FREE e PRO)',
+            items: const [
+              'Itens PRO aparecem com selo PRO.',
+              'Ao tocar em um item, o app preenche potência/tensão no cálculo.',
+              'BTU → W é aproximação: se você souber a potência real do equipamento, use a real.',
+            ],
+          ),
+
+          _section(
+            title: 'Orçamento (como deixar profissional)',
+            items: const [
+              'Preencha cliente e descreva serviços com clareza.',
+              'Se usar “Serviços PRO (IA)”, o app sugere valores comuns — você pode ajustar.',
+              'Materiais: use “Aplicar preços” se tiver seu banco de materiais cadastrado.',
+              'Margem: % para facilitar; ou valor fixo quando o serviço for “pacotão”.',
+              'PDF: revise antes de enviar (condições, prazo, garantia).',
+            ],
+          ),
+
+          _section(
+            title: 'Boas práticas (Play Store / cliente)',
+            items: const [
+              'Evite prometer “100%” em cálculos: sempre revise em campo.',
+              'Inclua observação de responsabilidade (app auxilia, não substitui projeto/ART).',
+              'Use linguagem simples: “o que o cliente entende” + detalhes técnicos quando necessário.',
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _intro() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: Text(
+        'Aqui tem explicação de cada tela e conceitos técnicos.\n'
+        'Se tiver dúvida em algum cálculo ou resultado, volta aqui.',
+        style: TextStyle(
+          color: Colors.white.withOpacity(.85),
+          height: 1.3,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _section({required String title, required List<String> items}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: ExpansionTile(
+        collapsedIconColor: Colors.white70,
+        iconColor: AppTheme.gold,
+        title: Text(
+          title,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        children: items
+            .map((t) => Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    '• $t',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(.80),
+                      height: 1.25,
+                    ),
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+  }
+}

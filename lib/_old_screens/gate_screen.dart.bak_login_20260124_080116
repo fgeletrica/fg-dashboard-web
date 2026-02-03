@@ -1,0 +1,136 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../core/local_store.dart';
+import '../routes/app_routes.dart';
+
+class GateScreen extends StatefulWidget {
+  const GateScreen({super.key});
+
+  @override
+  State<GateScreen> createState() => _GateScreenState();
+}
+
+class _GateScreenState extends State<GateScreen> {
+  bool accepted = false;
+  final name = TextEditingController();
+  final email = TextEditingController();
+  final phone = TextEditingController();
+  final company = TextEditingController(text: 'FG Elétrica');
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    accepted = await LocalStore.hasAcceptedTerms();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _continue() async {
+    if (!accepted) return;
+
+    final n = name.text.trim();
+    if (n.isEmpty) return;
+
+    await LocalStore.setAcceptedTerms(true);
+    await LocalStore.saveProfile(
+      name: n,
+      email: email.text,
+      phone: phone.text,
+      company: company.text,
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bem-vindo')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Termos de Uso',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Ao continuar, você confirma que leu e aceita os termos.\n'
+                      'Este app funciona offline e armazena seus dados localmente.\n'
+                      'Mais pra frente você pode ativar sincronização (Firebase).',
+                      style: TextStyle(color: AppTheme.muted, height: 1.4),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: accepted,
+                          activeColor: AppTheme.gold,
+                          onChanged: (v) =>
+                              setState(() => accepted = v ?? false),
+                        ),
+                        const Expanded(child: Text('Li e aceito os termos')),
+                      ],
+                    ),
+                    const Divider(height: 28),
+                    const Text('Seu perfil (1x só)',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: email,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'E-mail')),
+                    const SizedBox(height: 10),
+                    TextField(
+                        controller: name,
+                        decoration:
+                            const InputDecoration(labelText: 'Nome completo')),
+                    const SizedBox(height: 10),
+                    TextField(
+                        controller: phone,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                            labelText: 'Telefone com DDD')),
+                    const SizedBox(height: 10),
+                    TextField(
+                        controller: company,
+                        decoration: const InputDecoration(
+                            labelText: 'Empresa (opcional)')),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.gold,
+                            foregroundColor: Colors.black),
+                        onPressed: _continue,
+                        child: const Text('Continuar'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Dica: dá pra editar depois em Minha Conta.',
+                        style: TextStyle(color: AppTheme.muted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

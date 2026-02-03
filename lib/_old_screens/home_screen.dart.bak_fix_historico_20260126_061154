@@ -1,0 +1,369 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/app_theme.dart';
+import '../services/app_mode_store.dart';
+import 'mode_select_screen.dart';
+
+// Se você tiver AppRoutes, deixa assim.
+// Se não tiver, me manda o arquivo lib/routes/app_routes.dart que eu ajusto.
+import '../routes/app_routes.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  static const _kLastCalcTitle = 'last_calc_title_v1';
+  static const _kLastCalcSubtitle = 'last_calc_sub_v1';
+  static const _kLastCalcBadge = 'last_calc_badge_v1';
+
+  String _lastTitle = '';
+  String _lastSub = '';
+  String _lastBadge = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLast();
+  }
+
+  Future<void> _loadLast() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final t = (sp.getString(_kLastCalcTitle) ?? '').trim();
+      final s = (sp.getString(_kLastCalcSubtitle) ?? '').trim();
+      final b = (sp.getString(_kLastCalcBadge) ?? '').trim();
+      if (!mounted) return;
+      setState(() {
+        _lastTitle = t;
+        _lastSub = s;
+        _lastBadge = b;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _switchMode() async {
+    await AppModeStore.clear(); // volta pra tela de escolha
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const ModeSelectScreen()),
+    );
+  }
+
+  void _go(String route) {
+    Navigator.of(context).pushNamed(route);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+        titleSpacing: 12,
+        title: const Text('FG Elétrica • Residencial'),
+        actions: [
+          IconButton(
+            tooltip: 'Conta',
+            onPressed: () => _go(AppRoutes.conta),
+            icon: const Icon(Icons.person_outline),
+          ),
+          IconButton(
+            tooltip: 'Ajuda',
+            onPressed: () => _go(AppRoutes.tutoriais),
+            icon: const Icon(Icons.help_outline),
+          ),
+          IconButton(
+            tooltip: 'Trocar modo',
+            onPressed: _switchMode,
+            icon: const Icon(Icons.swap_horiz),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        children: [
+          _headline(),
+          const SizedBox(height: 12),
+          _lastCalcCard(),
+          const SizedBox(height: 12),
+          _grid(),
+          const SizedBox(height: 14),
+          _industrialDevCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _headline() {
+    return Text(
+      'Seu painel do dia a dia',
+      style: TextStyle(
+        color: Colors.white.withOpacity(.92),
+        fontWeight: FontWeight.w900,
+        fontSize: 18,
+      ),
+    );
+  }
+
+  Widget _lastCalcCard() {
+    final has = _lastTitle.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppTheme.gold.withOpacity(.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+            ),
+            child: Icon(Icons.bolt, color: AppTheme.gold),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      has ? 'Último cálculo' : 'Nenhum cálculo salvo ainda',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  if (_lastBadge.trim().isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.gold.withOpacity(.16),
+                        borderRadius: BorderRadius.circular(999),
+                        border:
+                            Border.all(color: AppTheme.gold.withOpacity(.35)),
+                      ),
+                      child: Text(
+                        _lastBadge,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(.9),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                has ? _lastTitle : 'Faça seu primeiro dimensionamento.',
+                style: TextStyle(
+                    color: Colors.white.withOpacity(.80),
+                    fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                has
+                    ? _lastSub
+                    : 'Potência, tensão, distância, cabo e disjuntor.',
+                style: TextStyle(
+                    color: Colors.white.withOpacity(.62),
+                    fontWeight: FontWeight.w600),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            onPressed: () => _go(AppRoutes.calc),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.gold,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            child: Text(has ? 'Refazer' : 'Calcular'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _grid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.25,
+      children: [
+        _bigTile(
+          icon: Icons.calculate_outlined,
+          title: 'Cálculo\nElétrico',
+          subtitle: 'Potência e queda',
+          onTap: () => _go(AppRoutes.calc),
+        ),
+        _bigTile(
+          icon: Icons.receipt_long_outlined,
+          title: 'Orçamentos',
+          subtitle: 'Gerar e salvar',
+          onTap: () => _go(AppRoutes.orcamentos),
+        ),
+        _bigTile(
+          icon: Icons.handyman_outlined,
+          title: 'Ferramentas',
+          subtitle: 'Regras rápidas',
+          onTap: () => _go(AppRoutes.ferramentas),
+        ),
+        _bigTile(
+          icon: Icons.history,
+          title: 'Histórico',
+          subtitle: 'Cálculos salvos',
+          onTap: () => _go(AppRoutes.historico),
+        ),
+      ],
+    );
+  }
+
+  Widget _bigTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.border.withOpacity(.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppTheme.gold.withOpacity(.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+              ),
+              child: Icon(icon, color: AppTheme.gold),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  height: 1.05),
+            ),
+            const Spacer(),
+            Text(
+              subtitle,
+              style: TextStyle(
+                  color: Colors.white.withOpacity(.65),
+                  fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _industrialDevCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E2A3E),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.lightBlueAccent.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: Colors.lightBlueAccent.withOpacity(.25)),
+                ),
+                child: Icon(Icons.factory_outlined,
+                    color: Colors.white.withOpacity(.85)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Modo Industrial (EM DESENVOLVIMENTO)',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Você já pode testar algumas funções, mas este módulo ainda está em construção.',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(.75),
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'O que vai entrar (em breve):\n'
+            '• Mapa da fábrica (Área → Linha → Máquina)\n'
+            '• QR da máquina (abre checklist + histórico direto)\n'
+            '• Fechamento de turno com ranking e timeline\n'
+            '• Exportação de relatórios padrão supervisor',
+            style: TextStyle(
+                color: Colors.white.withOpacity(.72),
+                fontWeight: FontWeight.w600,
+                height: 1.25),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: _switchMode,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: Colors.white.withOpacity(.22)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('Trocar para Modo Industrial'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

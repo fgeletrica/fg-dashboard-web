@@ -1,0 +1,50 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class MaterialDbItem {
+  String name;
+  String unit; // m, un, kg...
+  double price;
+
+  MaterialDbItem({required this.name, required this.unit, required this.price});
+
+  Map<String, dynamic> toJson() => {"name": name, "unit": unit, "price": price};
+
+  static MaterialDbItem fromJson(Map<String, dynamic> j) => MaterialDbItem(
+        name: (j["name"] ?? "").toString(),
+        unit: (j["unit"] ?? "un").toString(),
+        price: (j["price"] ?? 0).toDouble(),
+      );
+}
+
+class MaterialsStore {
+  static const _k = 'materials_db_v1';
+
+  static Future<List<MaterialDbItem>> load() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_k);
+    if (raw == null || raw.trim().isEmpty) return [];
+    final list = (jsonDecode(raw) as List).cast<dynamic>();
+    return list
+        .map((e) => MaterialDbItem.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  static Future<void> save(List<MaterialDbItem> items) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_k, jsonEncode(items.map((e) => e.toJson()).toList()));
+  }
+
+  static Future<void> add(MaterialDbItem item) async {
+    final list = await load();
+    list.insert(0, item);
+    await save(list);
+  }
+
+  static Future<void> removeAt(int i) async {
+    final list = await load();
+    if (i < 0 || i >= list.length) return;
+    list.removeAt(i);
+    await save(list);
+  }
+}

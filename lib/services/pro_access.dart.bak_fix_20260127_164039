@@ -1,0 +1,101 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
+class ProAccess {
+  static const _kPro = 'pro_enabled';
+  static const _kProDev = 'pro_dev';
+  static const _kPdfMonth = 'pdf_month';
+  static const _kPdfCount = 'pdf_count';
+
+  // ====== PRO básico ======
+  static Future<bool> hasProAccessNow() async {
+    // cache pra telas sync
+
+    final sp = await SharedPreferences.getInstance();
+    // modo dev força pro
+    final dev = sp.getBool(_kProDev) ?? false;
+    if (dev) return true;
+    return sp.getBool(_kPro) ?? false;
+  }
+
+  static Future<void> setPro(bool v) async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kPro, v);
+  }
+
+  static Future<bool> getProDev() async {
+    final sp = await SharedPreferences.getInstance();
+    return sp.getBool(_kProDev) ?? false;
+  }
+
+  static Future<void> setProDev(bool v) async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kProDev, v);
+  }
+
+  // ====== LIMITE DE PDF (FREE: 3/mês) ======
+  static int _ymNow() {
+    final d = DateTime.now();
+    return d.year * 100 + d.month; // ex: 202601
+  }
+
+  static Future<int> pdfCountThisMonth() async {
+    final sp = await SharedPreferences.getInstance();
+    final ym = _ymNow();
+    final savedYm = sp.getInt(_kPdfMonth) ?? ym;
+    if (savedYm != ym) {
+      await sp.setInt(_kPdfMonth, ym);
+      await sp.setInt(_kPdfCount, 0);
+      return 0;
+    }
+    return sp.getInt(_kPdfCount) ?? 0;
+  }
+
+  static Future<bool> canGeneratePdfNow() async {
+    final hasPro = await hasProAccessNow();
+    if (hasPro) return true;
+    final used = await pdfCountThisMonth();
+    return used < 3;
+  }
+
+  static Future<int> pdfRemainingThisMonth() async {
+    final hasPro = await hasProAccessNow();
+    if (hasPro) return 999999;
+    final used = await pdfCountThisMonth();
+    final left = 3 - used;
+    return left < 0 ? 0 : left;
+  }
+
+  static Future<void> registerPdfGenerated() async {
+    final hasPro = await hasProAccessNow();
+    if (hasPro) return;
+    final sp = await SharedPreferences.getInstance();
+    final ym = _ymNow();
+    final savedYm = sp.getInt(_kPdfMonth) ?? ym;
+    if (savedYm != ym) {
+      await sp.setInt(_kPdfMonth, ym);
+      await sp.setInt(_kPdfCount, 0);
+    }
+    final used = sp.getInt(_kPdfCount) ?? 0;
+    await sp.setInt(_kPdfCount, used + 1);
+  }
+
+  // ====== Compat (pra não quebrar arquivos antigos) ======
+  static Future<int> getTrialUntilMs() async => 0;
+  static Future<void> startTrial({required Duration duration}) async {}
+  static Future<void> resetTrial() async {}
+
+  static Future<Duration> trialRemaining() async => Duration.zero;
+
+  static String formatDuration(Duration d) {
+    final s = d.inSeconds;
+    final h = s ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    final ss = s % 60;
+    if (h > 0) return "${h}h ${m}m";
+    if (m > 0) return "${m}m ${ss}
+  static bool? _cachedHasPro;
+
+  /// Compat: algumas telas antigas chamam isso
+  static bool isProSync() => _cachedHasPro == true;
+
+}

@@ -1,0 +1,181 @@
+import 'package:flutter/material.dart';
+
+class ToolsScreen extends StatelessWidget {
+  const ToolsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ferramentas'),
+        leading: const BackButton(),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          ListTile(
+            title: const Text('Conversão de unidades'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const _UnitConv())),
+          ),
+          const Divider(),
+          ListTile(
+            title: const Text('Tabela de cabos (demo)'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const _CableTable())),
+          ),
+          const Divider(),
+          ListTile(
+            title: const Text('Queda de tensão (demo)'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const _VoltDrop())),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UnitConv extends StatefulWidget {
+  const _UnitConv();
+
+  @override
+  State<_UnitConv> createState() => _UnitConvState();
+}
+
+class _UnitConvState extends State<_UnitConv> {
+  final _mm2 = TextEditingController();
+  String _res = '';
+
+  @override
+  void dispose() {
+    _mm2.dispose();
+    super.dispose();
+  }
+
+  void _calc() {
+    final v = double.tryParse(_mm2.text.replaceAll(',', '.')) ?? 0;
+    final awg = (36 - (v.clamp(0.1, 200) / 5)).clamp(0, 36); // só um demo
+    setState(() => _res = 'Aprox. AWG: ${awg.toStringAsFixed(0)} (demo)');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar:
+          AppBar(title: const Text('Conversão'), leading: const BackButton()),
+      body: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            TextField(controller: _mm2,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'mm² (ex: 2.5,
+          
+          )'),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                  onPressed: _calc, child: const Text('Converter')),
+            ),
+            const SizedBox(height: 12),
+            Text(_res),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CableTable extends StatelessWidget {
+  const _CableTable();
+
+  @override
+  Widget build(BuildContext context) {
+    const rows = [
+      ['1.5 mm²', '15 A'],
+      ['2.5 mm²', '21 A'],
+      ['4 mm²', '28 A'],
+      ['6 mm²', '36 A'],
+      ['10 mm²', '50 A'],
+    ];
+    return Scaffold(
+      appBar: AppBar(
+          title: const Text('Tabela de cabos'), leading: const BackButton()),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(14),
+        itemCount: rows.length,
+        itemBuilder: (_, i) => ListTile(
+          title: Text(rows[i][0]),
+          trailing: Text(rows[i][1]),
+        ),
+      ),
+    );
+  }
+}
+
+class _VoltDrop extends StatefulWidget {
+  const _VoltDrop();
+
+  @override
+  State<_VoltDrop> createState() => _VoltDropState();
+}
+
+class _VoltDropState extends State<_VoltDrop> {
+  final _i = TextEditingController();
+  final _m = TextEditingController();
+  String _res = '';
+
+  @override
+  void dispose() {
+    _i.dispose();
+    _m.dispose();
+    super.dispose();
+  }
+
+  void _calc() {
+    final i = double.tryParse(_i.text.replaceAll(',', '.')) ?? 0;
+    final m = double.tryParse(_m.text.replaceAll(',', '.')) ?? 0;
+    final drop = (i * m * 0.004).clamp(0, 999); // demo
+    setState(
+        () => _res = 'Queda estimada (demo): ${drop.toStringAsFixed(2)} V');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+          title: const Text('Queda de tensão'), leading: const BackButton()),
+      body: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            TextField(controller: _i,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Corrente (A,
+          
+          )')),
+            const SizedBox(height: 10),
+            TextField(controller: _m,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Distância (m,
+          
+          )')),
+            const SizedBox(height: 12),
+            SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                    onPressed: _calc, child: const Text('Calcular'))),
+            const SizedBox(height: 12),
+            Text(_res),
+          ],
+        ),
+      ),
+    );
+  }
+}

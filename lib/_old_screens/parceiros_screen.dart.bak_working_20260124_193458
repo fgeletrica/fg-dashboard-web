@@ -1,0 +1,121 @@
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../core/app_theme.dart';
+
+class ParceirosScreen extends StatelessWidget {
+  const ParceirosScreen({super.key});
+
+  Future<void> _open(String url, BuildContext context) async {
+    final uri = Uri.parse(url);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir o link.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final partners = <_Partner>[
+      _Partner(
+        name: 'Loja parceira (exemplo)',
+        desc: 'Desconto: 10% em materiais elétricos',
+        url: 'https://wa.me/5521997901083?text=Quero%20virar%20parceiro%20do%20FG%20El%C3%A9trica',
+        tag: 'EM BREVE',
+      ),
+      _Partner(
+        name: 'Quer aparecer aqui?',
+        desc: 'Toque para falar no WhatsApp e virar parceiro.',
+        url: 'https://wa.me/5521997901083?text=Quero%20ser%20parceiro%20do%20app%20FG%20El%C3%A9trica',
+        tag: 'CONTATO',
+      ),
+    ];
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.card,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withOpacity(.12)),
+              ),
+              child: Text(
+                'Aqui você vai colocar lojas, links e descontos pros usuários.\n'
+                'No lançamento, você pode fechar parceria com lojas locais.',
+                style: TextStyle(color: Colors.white.withOpacity(.85), height: 1.25, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...partners.map((p) => _card(context, p)).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _card(BuildContext context, _Partner p) {
+    return InkWell(
+      onTap: () => _open(p.url, context),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.gold.withOpacity(.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+              ),
+              child: Icon(Icons.handshake_outlined, color: AppTheme.gold),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text(p.desc, style: TextStyle(color: Colors.white.withOpacity(.7))),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.06),
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(color: Colors.white.withOpacity(.14)),
+              ),
+              child: Text(p.tag, style: TextStyle(color: Colors.white.withOpacity(.85), fontWeight: FontWeight.w900, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Partner {
+  final String name;
+  final String desc;
+  final String url;
+  final String tag;
+  const _Partner({required this.name, required this.desc, required this.url, required this.tag});
+}

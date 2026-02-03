@@ -1,0 +1,493 @@
+import '../services/pro_guard.dart';
+import 'package:flutter/material.dart';
+
+import '../core/app_theme.dart';
+import 'package:meu_ajudante_fg/routes/app_routes.dart';
+import '../services/materials_store.dart';
+import '../utils/number_input.dart';
+
+class MaterialsScreen extends StatefulWidget {
+  const MaterialsScreen({super.key});
+
+  @override
+  State<MaterialsScreen> createState() => _MaterialsScreenState();
+}
+
+class _MaterialsScreenState extends State<MaterialsScreen> {
+  bool _loading = true;
+  bool _hasPro = false;
+
+  List<MaterialDbItem> _items = [];
+
+  // add
+  final _nameCtrl = TextEditingController();
+  final _unitCtrl = TextEditingController(text: 'm');
+  final _priceCtrl = TextEditingController(text: '0');
+  String _icon = 'build';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _unitCtrl.dispose();
+    _priceCtrl.dispose();
+    super.dispose();
+  }
+
+  double _toDouble(String s) =>
+      double.tryParse(s.replaceAll(',', '.').trim()) ?? 0.0;
+
+  IconData _iconFor(String k) {
+    switch (k) {
+      case 'cable':
+        return Icons.cable;
+      case 'breaker':
+        return Icons.electrical_services;
+      case 'lamp':
+        return Icons.lightbulb_outline;
+      case 'outlet':
+        return Icons.power_outlined;
+      case 'switch':
+        return Icons.toggle_on_outlined;
+      case 'pipe':
+        return Icons.linear_scale;
+      case 'box':
+        return Icons.check_box_outline_blank;
+      default:
+        return Icons.build;
+    }
+  }
+
+  String _catLabel(String iconKey) {
+    switch (iconKey) {
+      case 'cable':
+        return 'Cabos';
+      case 'breaker':
+        return 'Disjuntores';
+      case 'outlet':
+        return 'Tomadas';
+      case 'switch':
+        return 'Interruptores';
+      case 'lamp':
+        return 'Lâmpadas';
+      case 'pipe':
+        return 'Conduítes';
+      case 'box':
+        return 'Caixas';
+      default:
+        return 'Outros';
+    }
+  }
+
+  int _catOrder(String iconKey) {
+    switch (iconKey) {
+      case 'cable':
+        return 0;
+      case 'breaker':
+        return 1;
+      case 'outlet':
+        return 2;
+      case 'switch':
+        return 3;
+      case 'lamp':
+        return 4;
+      case 'pipe':
+        return 5;
+      case 'box':
+        return 6;
+      default:
+        return 99;
+    }
+  }
+
+  Future<void> _load() async {
+    if (mounted) setState(() => _loading = true);
+    final has = await ProGuard.hasPro();
+    final items = await MaterialsStore.load();
+    if (!mounted) return;
+    setState(() {
+      _hasPro = has;
+      _items = items;
+      _loading = false;
+    });
+  }
+
+  Future<void> _add() async {
+    if (!_hasPro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cadastrar materiais é PRO ✅')),
+      );
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    final n = _nameCtrl.text.trim();
+    final u = _unitCtrl.text.trim().isEmpty ? 'un' : _unitCtrl.text.trim();
+    final p = _toDouble(_priceCtrl.text);
+
+    if (n.isEmpty) return;
+
+    await MaterialsStore.add(
+        MaterialDbItem(name: n, unit: u, price: p, icon: _icon));
+    _nameCtrl.clear();
+    _unitCtrl.text = 'm';
+    _priceCtrl.text = '0';
+    _icon = 'build';
+    await _load();
+  }
+
+  Future<void> _del(int index) async {
+    if (!_hasPro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Excluir materiais é PRO ✅')),
+      );
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    await MaterialsStore.removeAt(index);
+    await _load();
+  }
+
+  Future<void> _edit(int index) async {
+    if (!_hasPro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Editar materiais é PRO ✅')),
+      );
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    final it = _items[index];
+
+    final name = TextEditingController(text: it.name);
+    final unit = TextEditingController(text: it.unit);
+    final price = TextEditingController(
+        text: it.price.toStringAsFixed(2).replaceAll('.', ','));
+    String icon = it.icon;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Editar material'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Nome')),
+            const SizedBox(height: 8),
+            TextField(
+                controller: unit,
+                decoration:
+                    const InputDecoration(labelText: 'Unidade (m/un/kg...)')),
+            const SizedBox(height: 8),
+            TextField(
+              controller: price,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [numberInputFormatter],
+              decoration: const InputDecoration(labelText: 'Preço'),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: icon,
+              decoration: const InputDecoration(labelText: 'Categoria'),
+              items: const [
+                DropdownMenuItem(value: 'cable', child: Text('Cabo')),
+                DropdownMenuItem(value: 'breaker', child: Text('Disjuntor')),
+                DropdownMenuItem(value: 'outlet', child: Text('Tomada')),
+                DropdownMenuItem(value: 'switch', child: Text('Interruptor')),
+                DropdownMenuItem(value: 'lamp', child: Text('Lâmpada')),
+                DropdownMenuItem(value: 'pipe', child: Text('Conduíte')),
+                DropdownMenuItem(value: 'box', child: Text('Caixa')),
+                DropdownMenuItem(value: 'build', child: Text('Outro')),
+              ],
+              onChanged: (v) => icon = v ?? 'build',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Salvar')),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    it.name = name.text.trim();
+    it.unit = unit.text.trim().isEmpty ? it.unit : unit.text.trim();
+    it.price = _toDouble(price.text);
+    it.icon = icon;
+
+    await MaterialsStore.save(_items);
+    await _load();
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+      ),
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Meus Materiais'),
+        actions: [
+          IconButton(
+              tooltip: 'Recarregar',
+              onPressed: _load,
+              icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _hasPro
+                            ? 'Cadastrar material'
+                            : 'Lista (FREE visualiza)',
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _nameCtrl,
+                        enabled: _hasPro,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Nome',
+                          labelStyle:
+                              TextStyle(color: Colors.white.withOpacity(.7)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _unitCtrl,
+                              enabled: _hasPro,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: InputDecoration(
+                                labelText: 'Unidade (m/un)',
+                                labelStyle: TextStyle(
+                                    color: Colors.white.withOpacity(.7)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _priceCtrl,
+                              enabled: _hasPro,
+                              inputFormatters: [numberInputFormatter],
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              style: const TextStyle(color: Colors.white),
+                              decoration: InputDecoration(
+                                labelText: 'Preço',
+                                labelStyle: TextStyle(
+                                    color: Colors.white.withOpacity(.7)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _icon,
+                        decoration: InputDecoration(
+                          labelText: 'Categoria',
+                          labelStyle:
+                              TextStyle(color: Colors.white.withOpacity(.7)),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'cable', child: Text('Cabo')),
+                          DropdownMenuItem(
+                              value: 'breaker', child: Text('Disjuntor')),
+                          DropdownMenuItem(
+                              value: 'outlet', child: Text('Tomada')),
+                          DropdownMenuItem(
+                              value: 'switch', child: Text('Interruptor')),
+                          DropdownMenuItem(
+                              value: 'lamp', child: Text('Lâmpada')),
+                          DropdownMenuItem(
+                              value: 'pipe', child: Text('Conduíte')),
+                          DropdownMenuItem(value: 'box', child: Text('Caixa')),
+                          DropdownMenuItem(
+                              value: 'build', child: Text('Outro')),
+                        ],
+                        onChanged: _hasPro
+                            ? (v) => setState(() => _icon = v ?? 'build')
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: ElevatedButton(
+                          onPressed: _hasPro
+                              ? _add
+                              : () => Navigator.of(context)
+                                  .pushNamed(AppRoutes.paywall),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.gold,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child:
+                              Text(_hasPro ? 'Salvar material' : 'Ativar PRO'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('Lista',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(.9),
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                if (_items.isEmpty)
+                  Text('Nenhum material ainda.',
+                      style: TextStyle(color: Colors.white.withOpacity(.7))),
+                ...(() {
+                  final groups = <String, List<MaterialDbItem>>{};
+                  for (final it in _items) {
+                    final key =
+                        (it.icon.trim().isEmpty) ? 'build' : it.icon.trim();
+                    groups.putIfAbsent(key, () => <MaterialDbItem>[]).add(it);
+                  }
+
+                  final keys = groups.keys.toList()
+                    ..sort((a, b) => _catOrder(a).compareTo(_catOrder(b)));
+
+                  return keys.map((key) {
+                    final list = groups[key]!
+                      ..sort((a, b) =>
+                          a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                    final title = _catLabel(key);
+
+                    return _card(
+                      child: Theme(
+                        data: Theme.of(context)
+                            .copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          childrenPadding: const EdgeInsets.only(top: 10),
+                          leading: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppTheme.gold.withOpacity(.12),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                  color: AppTheme.gold.withOpacity(.35)),
+                            ),
+                            child: Icon(_iconFor(key), color: AppTheme.gold),
+                          ),
+                          title: Text(
+                            '$title (${list.length})',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900),
+                          ),
+                          subtitle: Text(
+                            _hasPro
+                                ? 'Toque no lápis para editar'
+                                : 'FREE: só visualizar',
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(.65),
+                                fontWeight: FontWeight.w600),
+                          ),
+                          children: list.map((it) {
+                            final i = _items.indexOf(it);
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.bg,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: AppTheme.border.withOpacity(.25)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          it.name,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w900),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Un: ${it.unit} • R\$ ${it.price.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                              color:
+                                                  Colors.white.withOpacity(.7)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Editar',
+                                    onPressed: () => _edit(i),
+                                    icon: const Icon(Icons.edit),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Excluir',
+                                    onPressed: () => _del(i),
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    );
+                  }).toList();
+                })(),
+              ],
+            ),
+    );
+  }
+}

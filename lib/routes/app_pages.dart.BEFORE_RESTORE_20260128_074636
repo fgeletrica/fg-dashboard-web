@@ -1,0 +1,13 @@
+import 'package:flutter/material.dart';
+
+import '../screens/home_screen.dart';
+import '../screens/about_screen.dart';
+import '../screens/services_market_screen.dart';
+
+import 'app_routes.dart';
+
+final Map<String, WidgetBuilder> appPages = {
+  AppRoutes.homeMain: (_) => const HomeScreen(),
+  AppRoutes.sobre: (_) => const AboutScreen(),
+  AppRoutes.marketplace: (_) => const ServicesMarketScreen(),
+};

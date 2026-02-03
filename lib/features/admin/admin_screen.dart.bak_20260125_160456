@@ -1,0 +1,191 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/pro_access.dart';
+
+class AdminScreen extends StatefulWidget {
+  const AdminScreen({super.key});
+
+  @override
+  State<AdminScreen> createState() => _AdminScreenState();
+}
+
+class _AdminScreenState extends State<AdminScreen> {
+  // cores
+  final bg = const Color(0xFF0E1117);
+  final card = const Color(0xFF141A22);
+  final border = const Color(0xFF2B2F3A);
+  final gold = const Color(0xFFF7C948);
+
+  // auth
+  static const _kAdminPass = 'admin_pass_v1';
+  static const _kAdminAuthed = 'admin_authed_v1';
+
+  final _passCtrl = TextEditingController();
+  bool _authed = false;
+  bool _loadingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAuth();
+  }
+
+  Future<void> _loadAuth() async {
+    final sp = await SharedPreferences.getInstance();
+    final ok = sp.getBool(_kAdminAuthed) ?? false;
+    if (!mounted) return;
+    setState(() {
+      _authed = ok;
+      _loadingAuth = false;
+    });
+  }
+
+  Future<void> _login() async {
+    final sp = await SharedPreferences.getInstance();
+    final saved = (sp.getString(_kAdminPass) ?? '1234').trim();
+    if (_passCtrl.text.trim() == saved) {
+      await sp.setBool(_kAdminAuthed, true);
+      if (!mounted) return;
+      setState(() => _authed = true);
+    } else {
+      _snack('Senha incorreta');
+    }
+  }
+
+  Future<void> _logout() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kAdminAuthed, false);
+    if (!mounted) return;
+    setState(() => _authed = false);
+  }
+
+  void _snack(String t) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFF0E1117),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+
+  Widget _cardBox({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loadingAuth) {
+      return Scaffold(
+        backgroundColor: bg,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_authed) {
+      return _buildLogin();
+    }
+
+    return _buildAdmin();
+  }
+
+  Widget _buildLogin() {
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(backgroundColor: bg, title: const Text('Admin')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _cardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Digite a senha do Admin',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _passCtrl,
+                  obscureText: true,
+                  decoration: _dec('Senha'),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: gold,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _login,
+                    child: const Text('Entrar', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdmin() {
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        title: const Text('Admin'),
+        actions: [
+          IconButton(onPressed: _logout, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _cardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Painel Admin OK ✅',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Arquivo corrigido, build estável.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminStatus {
+  final bool proDev;
+  final int? trialUntilMs;
+  final Duration trialRemaining;
+  final bool hasAccessNow;
+
+  _AdminStatus({
+    required this.proDev,
+    required this.trialUntilMs,
+    required this.trialRemaining,
+    required this.hasAccessNow,
+  });
+}

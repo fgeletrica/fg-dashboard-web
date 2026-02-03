@@ -1,0 +1,353 @@
+import '../services/orcamento_auto.dart';
+import '../utils/number_input.dart';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../core/eletrico_calc.dart';
+import '../core/local_store.dart';
+import 'package:meu_ajudante_fg/routes/app_routes.dart';
+import 'budget_editor_screen.dart';
+import 'calc_history_screen.dart';
+import '../models/budget_models.dart' as bm;
+
+class CalcScreen extends StatefulWidget {
+  const CalcScreen({super.key});
+
+  @override
+  State<CalcScreen> createState() => _CalcScreenState();
+}
+
+class _CalcScreenState extends State<CalcScreen> {
+  bool _modoRapido = true;
+  bool _showAdvanced = false;
+
+  final _potCtrl = TextEditingController();
+  final _distCtrl = TextEditingController();
+  double _tensao = 220;
+
+  // opcionais
+  final _fpCtrl = TextEditingController(text: '1.0'); // fator de potência
+  final _etaCtrl = TextEditingController(text: '1.0'); // rendimento
+  final _limCtrl = TextEditingController(text: '4.0'); // limite queda (%)
+
+  String _title = 'Cálculo Elétrico';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      final t = (args['title'] ?? '').toString();
+      final pw = args['powerW'];
+      final v = args['voltage'];
+      if (t.isNotEmpty) _title = t;
+      if (pw != null) _potCtrl.text = pw.toString();
+      if (v != null) _tensao = double.tryParse(v.toString()) ?? _tensao;
+    }
+  }
+
+  @override
+  void dispose() {
+    _potCtrl.dispose();
+    _distCtrl.dispose();
+    _fpCtrl.dispose();
+    _etaCtrl.dispose();
+    _limCtrl.dispose();
+    super.dispose();
+  }
+
+  double _d(TextEditingController c, double fallback) =>
+      double.tryParse(c.text.trim().replaceAll(',', '.')) ?? fallback;
+
+  Future<void> _calc() async {
+    final pot = _d(_potCtrl, 0);
+    final dist = _d(_distCtrl, 0);
+    final fp = _d(_fpCtrl, 1.0);
+    final eta = _d(_etaCtrl, 1.0);
+    final lim = _d(_limCtrl, 4.0);
+
+    if (pot <= 0 || dist < 0 || _tensao <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('Preencha Potência, Tensao e Distância corretamente.')),
+      );
+      return;
+    }
+
+    final fpOk = fp <= 0 ? 1.0 : fp;
+    final etaOk = eta <= 0 ? 1.0 : eta;
+
+    // Potência elétrica efetiva (se usuário colocar FP/η diferentes)
+    final potEfetiva = pot / (fpOk * etaOk);
+
+    // Usa seu core/eletrico_calc.dart
+    final res = EletricoCalc.dimensionar(
+      potW: potEfetiva,
+      tensaoV: _tensao,
+      distanciaM: dist,
+      limiteQvPct: lim,
+    );
+
+    final ib = res.ibA;
+    final cabo = res.caboMm2;
+    final disj = res.disjuntorA;
+    final qv = res.quedaTensaoPct;
+    final iz = res.izA;
+
+    // salva no historico (top 20)
+    try {
+      await LocalStore.addCalcHistoryRaw(jsonEncode({
+        'title': _title,
+        'potW': pot.toStringAsFixed(0),
+        'tensaoV': _tensao.toStringAsFixed(0),
+        'distM': dist.toStringAsFixed(0),
+        'ibA': ib.toStringAsFixed(2),
+        'caboMm2': cabo.toStringAsFixed(1),
+        'disjA': disj.toStringAsFixed(0),
+        'izA': iz.toString(),
+        'qvPct': qv.toStringAsFixed(2),
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      }));
+    } catch (_) {}
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Resultado  -  $_title'),
+        content: SingleChildScrollView(
+          child: Text(
+            'Entradas:\n'
+            '• Potência: ${pot.toStringAsFixed(0)} W\n'
+            '• Tensao: ${_tensao.toStringAsFixed(0)} V\n'
+            '• Distância: ${dist.toStringAsFixed(0)} m\n'
+            '• FP (opcional): ${fpOk.toStringAsFixed(2)}\n'
+            '• Rendimento η (opcional): ${etaOk.toStringAsFixed(2)}\n'
+            '• Limite queda: ${lim.toStringAsFixed(1)} %\n\n'
+            'Cálculo técnico:\n'
+            '• Corrente (Ib): ${ib.toStringAsFixed(2)} A\n'
+            '• Cabo sugerido: ${cabo.toStringAsFixed(1)} mm²\n'
+            '• Capacidade (Iz): ${iz} A\n'
+            '• Disjuntor: ${disj} A\n'
+            '• Queda de tensao: ${qv.toStringAsFixed(2)} %\n\n'
+            'Notas:\n'
+            '• Regra: In ≥ Ib e In ≤ Iz do cabo.\n'
+            '• Se a queda estourar, o app sobe a secao.\n'
+            '• Para motores/ar-condicionado, FP e η podem mudar o Ib.\n',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+
+              final doc = bm.BudgetDoc.newDoc(
+                originTitle: _title,
+                originPowerW: pot,
+                originVoltage: _tensao.toInt(),
+                originDistanceM: dist,
+              );
+
+              // Pré-preenchimentos úteis (simples pro dia a dia)
+              // Cabo (ida+volta estimado)
+              final double metros = (dist <= 0) ? 0.0 : (dist * 2.0);
+              if (metros > 0) {
+                doc.materials.add(bm.BudgetItem(
+                  name: 'Cabo ${cabo.toStringAsFixed(1)} mm²',
+                  qty: metros,
+                  unit: 'm',
+                  unitPrice: 0,
+                ));
+              }
+              doc.materials.add(bm.BudgetItem(
+                name: 'Disjuntor ${disj.toStringAsFixed(0)}A',
+                qty: 1,
+                unit: 'un',
+                unitPrice: 0,
+              ));
+
+              doc.services.add(bm.BudgetServiceLine(
+                name: 'Mao de obra',
+                price: 0,
+              ));
+
+              // Sugestões fixas (editáveis) — DR + DPS
+              doc.materials.add(bm.BudgetItem(
+                name: 'DR 2P 63A 30mA',
+                qty: 1,
+                unit: 'un',
+                unitPrice: 0,
+              ));
+              doc.materials.add(bm.BudgetItem(
+                name: 'DPS Classe II 275V (20-40kA)',
+                qty: 1,
+                unit: 'un',
+                unitPrice: 0,
+              ));
+
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => BudgetEditorScreen(doc: doc)),
+              );
+            },
+            child: const Text('Criar orcamento'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+            color: Colors.white.withOpacity(.75), fontWeight: FontWeight.w700),
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: AppTheme.gold.withOpacity(.65))),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Cálculo Elétrico'),
+        actions: [
+          IconButton(
+            tooltip: 'Historico',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CalcHistoryScreen()),
+            ),
+            icon: const Icon(Icons.history),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ListView(
+          children: [
+            const SizedBox(height: 6),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Modo rápido'),
+              subtitle: const Text('Só o essencial (obra)'),
+              value: _modoRapido,
+              onChanged: (v) => setState(() {
+                _modoRapido = v;
+                if (v) _showAdvanced = false;
+              }),
+            ),
+            if (!_modoRapido) ...[
+              const SizedBox(height: 6),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Opções avançadas'),
+                subtitle: const Text('FP, rendimento e limite de queda'),
+                value: _showAdvanced,
+                onChanged: (v) => setState(() => _showAdvanced = v),
+              ),
+            ],
+            const Divider(height: 18),
+            Text(
+              _title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _potCtrl,
+              keyboardType: TextInputType.number,
+              decoration: _dec('Potência (W)'),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<double>(
+              value: _tensao,
+              decoration: _dec('Tensão (V)'),
+              items: const [
+                DropdownMenuItem(value: 127.0, child: Text('127 V')),
+                DropdownMenuItem(value: 220.0, child: Text('220 V')),
+              ],
+              onChanged: (v) => setState(() => _tensao = v ?? 220.0),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _distCtrl,
+              keyboardType: TextInputType.number,
+              decoration: _dec('Distância (m)'),
+            ),
+            if (!_modoRapido && _showAdvanced) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _fpCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _dec('Fator de potência (FP) — opcional'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _etaCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _dec('Rendimento — opcional'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _limCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _dec('Limite de queda (%) — opcional'),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: _calc,
+                icon: const Icon(Icons.calculate),
+                label: const Text(
+                  'Calcular',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.gold,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+void _gerarOrcamento(
+    BuildContext context, double potencia, double tensao, double distancia) {
+  final itens = gerarOrcamentoAutomatico(
+    potencia: potencia,
+    tensao: tensao,
+    distancia: distancia,
+  );
+
+  Navigator.of(context).pushNamed(
+    '/orcamento',
+    arguments: itens,
+  );
+}

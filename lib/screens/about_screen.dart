@@ -1,0 +1,167 @@
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../core/app_theme.dart';
+
+class AboutScreen extends StatelessWidget {
+  const AboutScreen({super.key});
+
+  Future<void> _open(String url, BuildContext context) async {
+    final uri = Uri.parse(url);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/logo.png',
+                width: 26,
+                height: 26,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.bolt, color: AppTheme.gold, size: 20),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text('Sobre o app'),
+          ],
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('FG Elétrica',
+                    style: TextStyle(
+                        color: AppTheme.gold,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 22)),
+                const SizedBox(height: 6),
+                const Text('CEO: Felype Guimarães',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                Text(
+                  'App criado para ajudar eletricistas e autônomos: cálculo elétrico, orçamento, PDF e ferramentas.',
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(.8), height: 1.25),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Redes sociais',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16)),
+                const SizedBox(height: 10),
+                _btn(
+                  context,
+                  icon: Icons.chat,
+                  title: 'WhatsApp (suporte)',
+                  subtitle: '21 99790-1083',
+                  onTap: () => _open('https://wa.me/5521997901083', context),
+                ),
+                _btn(
+                  context,
+                  icon: Icons.facebook_outlined,
+                  title: 'Facebook',
+                  subtitle: 'FG Eletrica',
+                  onTap: () => _open(
+                      'https://www.facebook.com/share/1CSZ3681VC/', context),
+                ),
+                _btn(
+                  context,
+                  icon: Icons.camera_alt_outlined,
+                  title: 'Instagram',
+                  subtitle: '@fg_eletrica_ofc',
+                  onTap: () =>
+                      _open('https://instagram.com/fg_eletrica_ofc', context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _card(
+            child: Text(
+              'Aviso: este app auxilia nos cálculos e organização, mas não substitui projeto/ART e inspeção em campo.',
+              style:
+                  TextStyle(color: Colors.white.withOpacity(.75), height: 1.25),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _btn(BuildContext context,
+      {required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(.10)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppTheme.gold),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w900)),
+                  Text(subtitle,
+                      style: TextStyle(color: Colors.white.withOpacity(.7))),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+          ],
+        ),
+      ),
+    );
+  }
+}

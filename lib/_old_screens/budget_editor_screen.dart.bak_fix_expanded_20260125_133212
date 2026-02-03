@@ -1,0 +1,533 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:open_filex/open_filex.dart';
+
+import '../models/budget_models.dart';
+import '../services/budget_store.dart';
+import '../services/pdf_service.dart';
+import '../services/pro_access.dart';
+import '../services/materials_store.dart';
+import 'signature_screen.dart';
+import 'services_pro_screen.dart';
+import '../routes/app_routes.dart';
+
+class BudgetEditorScreen extends StatefulWidget {
+  final BudgetDoc doc;
+  const BudgetEditorScreen({super.key, required this.doc});
+
+  @override
+  State<BudgetEditorScreen> createState() => _BudgetEditorScreenState();
+}
+
+class _BudgetEditorScreenState extends State<BudgetEditorScreen> {
+  late BudgetDoc doc;
+
+  final clientCtrl = TextEditingController();
+  final marginCtrl = TextEditingController();
+
+  bool showMaterials = false;
+  bool showServices = true;
+
+  @override
+  void initState() {
+    super.initState();
+    doc = widget.doc;
+    clientCtrl.text = doc.clientName;
+    marginCtrl.text = doc.marginValue.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    clientCtrl.dispose();
+    marginCtrl.dispose();
+    super.dispose();
+  }
+
+  double toDouble(String s) => double.tryParse(s.replaceAll(',', '.').trim()) ?? 0.0;
+  String money(double v) => "R\$ ${v.toStringAsFixed(2)}";
+
+  InputDecoration dec(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFF141A22),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+
+  void addMaterial() => setState(() => doc.materials.add(
+      BudgetItem(name: "Material", qty: 1, unit: "un", unitPrice: 0)));
+
+  void addServiceManual() => setState(() =>
+      doc.services.add(BudgetServiceLine(name: "Serviço", price: 0)));
+
+  Future<void> save() async {
+    doc.clientName = clientCtrl.text.trim();
+    doc.marginValue = toDouble(marginCtrl.text);
+
+    await BudgetStore.upsert(doc);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Orçamento salvo ✅")));
+    setState(() {});
+  }
+
+  Future<void> signOptional() async {
+    final b64 = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute(builder: (_) => const SignatureScreen()),
+    );
+    if (b64 == null) return;
+    setState(() => doc.signatureB64 = b64);
+    await save();
+  }
+
+  Future<void> exportPdf({required bool share}) async {
+    try {
+      final file = await PdfService.generateBudgetPdf(doc: doc);
+      if (!mounted) return;
+
+      if (share) {
+        await Share.shareXFiles([XFile(file.path)], text: "Orçamento FG Elétrica");
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Abrindo PDF...")));
+        await OpenFilex.open(file.path);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erro ao gerar PDF: $e")),
+      );
+    }
+  }
+
+  Future<void> applyMaterialPricesFromDb() async {
+    final db = await BudgetStore.loadMaterialsDb();
+    if (db.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cadastre materiais primeiro.")));
+      return;
+    }
+
+    int hits = 0;
+    for (final it in doc.materials) {
+      final name = it.name.toLowerCase().trim();
+      if (name.isEmpty) continue;
+
+      Map<String, dynamic>? best;
+      for (final m in db) {
+        final mn = (m["name"] ?? "").toString().toLowerCase().trim();
+        if (mn.isEmpty) continue;
+        if (name.contains(mn) || mn.contains(name)) {
+          best = m;
+          break;
+        }
+      }
+      if (best != null) {
+        it.unit = (best["unit"] ?? it.unit).toString();
+        it.unitPrice = (best["price"] ?? it.unitPrice).toDouble();
+        hits++;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Preços aplicados em $hits item(ns).")));
+  }
+
+  Future<void> addServiceFromProWizard() async {
+    final has = await ProAccess.hasProAccessNow();
+    if (!has) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Recurso PRO — desbloqueie para usar ✅")));
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    if (!mounted) return;
+    final r = await Navigator.push<Map?>(
+      context,
+      MaterialPageRoute(builder: (_) => const ServicesProScreen()),
+    );
+    if (r == null) return;
+
+    final name = (r['name'] ?? '').toString();
+    final price = (r['price'] is num) ? (r['price'] as num).toDouble() : 0.0;
+
+    if (name.trim().isEmpty) return;
+    setState(() => doc.services.add(BudgetServiceLine(name: name.trim(), price: price)));
+  }
+
+  bool get hasSignature => doc.signatureB64 != null && doc.signatureB64!.trim().isNotEmpty;
+
+  @override
+  
+  Future<void> _pickMaterialFromDb(BuildContext context, dynamic it) async {
+    final db = await MaterialsStore.load();
+    if (!mounted) return;
+    if (db.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cadastre materiais em Meus Materiais primeiro.')));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Selecionar material",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: db.length,
+                itemBuilder: (_, i) {
+                  final m = db[i];
+                  return ListTile(
+                    leading: const Icon(Icons.inventory_2),
+                    title: Text(m.name),
+                    subtitle: Text("Un: ${m.unit} • R\$ ${m.price.toStringAsFixed(2)}"),
+                    onTap: () {
+                      setState(() {
+                        it.name = m.name;
+                        it.unit = m.unit;
+                        it.unitPrice = m.price;
+                      });
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+Widget build(BuildContext context) {
+    final canGenerate = clientCtrl.text.trim().isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Orçamento"),
+        actions: [
+          IconButton(
+            tooltip: "Salvar",
+            onPressed: save,
+            icon: const Icon(Icons.save),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (doc.originTitle != null)
+            _card(
+              child: Text(
+                "Origem: ${doc.originTitle} • ${doc.originPowerW?.toStringAsFixed(0) ?? '—'}W • ${doc.originVoltage ?? '—'}V",
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Cliente", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                const SizedBox(height: 10),
+                TextField(controller: clientCtrl, decoration: dec("Nome do cliente")),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: signOptional,
+                    icon: Icon(hasSignature ? Icons.verified : Icons.edit),
+                    label: Text(hasSignature ? "Assinado ✅ (opcional)" : "Assinar (opcional)"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text("Serviços", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() => showServices = !showServices),
+                      child: Text(showServices ? "Ocultar" : "Mostrar"),
+                    ),
+                  ],
+                ),
+                if (showServices) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: addServiceManual,
+                          icon: const Icon(Icons.add),
+                          label: const Text("Adicionar manual"),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: addServiceFromProWizard,
+                          icon: const Icon(Icons.auto_fix_high),
+                          label: const Text("Serviços PRO"),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...doc.services.asMap().entries.map((e) {
+                    final i = e.key;
+                    final s = e.value;
+                    return _card(
+                      child: Column(
+                        children: [
+                          _head("Serviço", onDelete: () => setState(() => doc.services.removeAt(i))),
+                          TextField(
+                            controller: TextEditingController(text: s.name),
+                            decoration: dec("Nome do serviço"),
+                            onChanged: (v) => s.name = v,
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: TextEditingController(text: s.price.toStringAsFixed(2)),
+                            decoration: dec("Valor (R\$)"),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            onChanged: (v) => setState(() => s.price = toDouble(v)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text("Materiais (opcional)", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() => showMaterials = !showMaterials),
+                      child: Text(showMaterials ? "Ocultar" : "Mostrar"),
+                    ),
+                  ],
+                ),
+                if (showMaterials) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: addMaterial,
+                          icon: const Icon(Icons.add),
+                          label: const Text("Adicionar material"),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: applyMaterialPricesFromDb,
+                          icon: const Icon(Icons.auto_fix_high),
+                          label: const Text("Aplicar preços"),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...doc.materials.asMap().entries.map((e) {
+                    final i = e.key;
+                    final it = e.value;
+                    return _card(
+                      child: Column(
+                        children: [
+                          _head("Material", onDelete: () => setState(() => doc.materials.removeAt(i))),
+                          Material(
+                            color: Colors.transparent,
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _pickMaterialFromDb(context, it),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141A22),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFF2B2F3A)),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.inventory_2, size: 18, color: Colors.white70),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        (it.name.trim().isEmpty) ? 'Selecionar material' : it.name,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: TextEditingController(text: it.qty.toStringAsFixed(2)),
+                                  decoration: dec("Qtd"),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  onChanged: (v) => setState(() => it.qty = toDouble(v)),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: TextEditingController(text: it.unit),
+                                  decoration: dec("Un"),
+                                  onChanged: (v) => setState(() => it.unit = v),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: TextEditingController(text: it.unitPrice.toStringAsFixed(2)),
+                            decoration: dec("Preço unitário (R\$)"),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            onChanged: (v) => setState(() => it.unitPrice = toDouble(v)),
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text("Total: ${money(it.total)}", style: const TextStyle(fontWeight: FontWeight.w900)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+
+          _card(
+            child: Column(
+              children: [
+                const SizedBox.shrink(),
+
+                const SizedBox(height: 10),
+                _row("Subtotal materiais", money(doc.subtotalMaterials)),
+                _row("Subtotal serviços", money(doc.subtotalServices)),
+                _row("Margem", money(doc.marginAmount)),
+                const Divider(),
+                _row("TOTAL", money(doc.total), strong: true),
+              ],
+            ),
+          ),
+
+          FutureBuilder<bool>(
+            future: ProAccess.hasProAccessNow(),
+            builder: (context, snap) {
+              final pro = snap.data ?? false;
+              return Text(
+                pro ? "PRO ativo: PDF sai limpo ✅" : "FREE: PDF sai com marca d'água ✅ (PRO remove)",
+                style: const TextStyle(color: Colors.white70),
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canGenerate ? () => exportPdf(share: false) : null,
+                  icon: const Icon(Icons.picture_as_pdf),
+                  label: const Text("Gerar PDF"),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canGenerate ? () => exportPdf(share: true) : null,
+                  icon: const Icon(Icons.share),
+                  label: const Text("Enviar WhatsApp"),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141A22),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF2B2F3A)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _head(String title, {required VoidCallback onDelete}) {
+    return Row(
+      children: [
+        const Icon(Icons.drag_indicator),
+        const SizedBox(width: 8),
+        Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+        IconButton(onPressed: onDelete, icon: const Icon(Icons.delete)),
+      ],
+    );
+  }
+
+  Widget _row(String a, String b, {bool strong = false}) {
+    final style = TextStyle(
+      color: strong ? Colors.white : Colors.white70,
+      fontWeight: strong ? FontWeight.w900 : FontWeight.w600,
+      fontSize: strong ? 16 : 14,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(a, style: style)),
+          Text(b, style: style),
+        ],
+      ),
+    );
+  }
+}

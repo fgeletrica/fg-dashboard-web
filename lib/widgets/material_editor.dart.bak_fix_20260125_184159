@@ -1,0 +1,75 @@
+import 'package:flutter/material.dart';
+import '../models/material_item.dart';
+
+class MaterialEditor extends StatefulWidget {
+  final void Function(MaterialItem) onAdd;
+  const MaterialEditor({super.key, required this.onAdd});
+
+  @override
+  State<MaterialEditor> createState() => _MaterialEditorState();
+}
+
+class _MaterialEditorState extends State<MaterialEditor> {
+  final _name = TextEditingController();
+  final _qty = TextEditingController(text: '1');
+  final _price = TextEditingController();
+  String _type = 'metro';
+
+  double get qty => double.tryParse(_qty.text.replaceAll(',', '.')) ?? 0;
+  double get price => parseMoney(_price.text);
+  double get total => qty * price;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextField(controller: _name, decoration: const InputDecoration(labelText: 'Material')),
+        const SizedBox(height: 6),
+        DropdownButtonFormField(
+          value: _type,
+          items: const [
+            DropdownMenuItem(value: 'metro', child: Text('Metro')),
+            DropdownMenuItem(value: 'unidade', child: Text('Unidade')),
+          ],
+          onChanged: (v) => setState(() => _type = v.toString()),
+          decoration: const InputDecoration(labelText: 'Tipo'),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _qty,
+          
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Quantidade'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _price,
+          
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Preço unitário'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 6),
+        Text('Total: R\$ ${total.toStringAsFixed(2).replaceAll('.', ',')}'),
+        const SizedBox(height: 10),
+        ElevatedButton(
+          onPressed: () {
+            if (_name.text.trim().isEmpty) return;
+            widget.onAdd(MaterialItem(
+              name: _name.text.trim(),
+              type: _type,
+              quantity: qty,
+              unitPrice: price,
+            ));
+            _name.clear();
+            _qty.text = '1';
+            _price.clear();
+            setState(() {});
+          },
+          child: const Text('Adicionar material'),
+        ),
+      ],
+    );
+  }
+}

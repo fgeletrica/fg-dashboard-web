@@ -1,0 +1,86 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
+class LocalStore {
+  static const _kAcceptedTerms = 'accepted_terms';
+  static const _kName = 'user_name';
+  static const _kEmail = 'user_email';
+  static const _kPhone = 'user_phone';
+  static const _kCompany = 'user_company';
+  static const _kFirstOpen = 'first_open_ts';
+  static const _kProUntil = 'pro_until_ts';
+
+  static Future<SharedPreferences> _p() => SharedPreferences.getInstance();
+
+  static Future<bool> hasAcceptedTerms() async =>
+      (await _p()).getBool(_kAcceptedTerms) ?? false;
+  static Future<void> setAcceptedTerms(bool v) async =>
+      (await _p()).setBool(_kAcceptedTerms, v);
+
+  static Future<bool> hasProfile() async =>
+      ((await getName()).trim().isNotEmpty);
+
+  static Future<void> saveProfile({
+    required String name,
+    required String email,
+    required String phone,
+    required String company,
+  }) async {
+    final p = await _p();
+    await p.setString(_kName, name.trim());
+    await p.setString(_kEmail, email.trim());
+    await p.setString(_kPhone, phone.trim());
+    await p.setString(_kCompany, company.trim());
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!p.containsKey(_kFirstOpen)) {
+      await p.setInt(_kFirstOpen, now);
+      // Trial PRO 1 dia para conta nova
+      await p.setInt(_kProUntil, now + const Duration(days: 1).inMilliseconds);
+    }
+  }
+
+  static Future<String> getName() async => (await _p()).getString(_kName) ?? '';
+  static Future<String> getEmail() async =>
+      (await _p()).getString(_kEmail) ?? '';
+  static Future<String> getPhone() async =>
+      (await _p()).getString(_kPhone) ?? '';
+  static Future<String> getCompany() async =>
+      (await _p()).getString(_kCompany) ?? 'FG Elétrica';
+
+  static Future<int> _proUntilTs() async =>
+      (await _p()).getInt(_kProUntil) ?? 0;
+
+  static Future<bool> getPro() async =>
+      DateTime.now().millisecondsSinceEpoch < await _proUntilTs();
+
+  static Future<void> grantProDays(int days) async {
+    final p = await _p();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final current = p.getInt(_kProUntil) ?? 0;
+    final base = current > now ? current : now;
+    await p.setInt(_kProUntil, base + Duration(days: days).inMilliseconds);
+  }
+
+  static Future<String> planLabel() async =>
+      (await getPro()) ? 'PRO' : 'Gratuito';
+
+  // --------- HISTÓRICO DO CÁLCULO ---------
+  static const _kCalcHistory = 'calc_history_v1';
+
+  static Future<List<String>> getCalcHistoryRaw() async =>
+      (await _p()).getStringList(_kCalcHistory) ?? <String>[];
+
+  static Future<void> addCalcHistoryRaw(String jsonLine) async {
+    final p = await _p();
+    final list = p.getStringList(_kCalcHistory) ?? <String>[];
+    // coloca no topo
+    final newList = [jsonLine, ...list.where((e) => e != jsonLine)];
+    // limita 20
+    await p.setStringList(_kCalcHistory, newList.take(20).toList());
+  }
+
+  static Future<void> clearCalcHistory() async {
+    final p = await _p();
+    await p.remove(_kCalcHistory);
+  }
+}

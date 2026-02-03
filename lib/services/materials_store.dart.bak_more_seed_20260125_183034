@@ -1,0 +1,92 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class MaterialDbItem {
+  String name;
+  String unit; // m, un, kg...
+  double price;
+  String icon; // 'cable','breaker','lamp','outlet','switch','pipe','box','build'
+
+  MaterialDbItem({
+    required this.name,
+    required this.unit,
+    required this.price,
+    this.icon = 'build',
+  });
+
+  Map<String, dynamic> toJson() => {
+        "name": name,
+        "unit": unit,
+        "price": price,
+        "icon": icon,
+      };
+
+  static MaterialDbItem fromJson(Map<String, dynamic> j) => MaterialDbItem(
+        name: (j["name"] ?? "").toString(),
+        unit: (j["unit"] ?? "un").toString(),
+        price: (j["price"] is num) ? (j["price"] as num).toDouble() : 0.0,
+        icon: (j["icon"] ?? "build").toString(),
+      );
+}
+
+class MaterialsStore {
+  static const _k = 'materials_db_v1';
+
+  // Lista base (aparece pro FREE ver e pro PRO usar como ponto de partida)
+  static List<MaterialDbItem> seed() => [
+        MaterialDbItem(name: 'Cabo Flex 2,5mm²', unit: 'm', price: 4.50, icon: 'cable'),
+        MaterialDbItem(name: 'Cabo Flex 4mm²', unit: 'm', price: 7.90, icon: 'cable'),
+        MaterialDbItem(name: 'Disjuntor 20A', unit: 'un', price: 28.00, icon: 'breaker'),
+        MaterialDbItem(name: 'Disjuntor 32A', unit: 'un', price: 35.00, icon: 'breaker'),
+        MaterialDbItem(name: 'Tomada 10A', unit: 'un', price: 12.00, icon: 'outlet'),
+        MaterialDbItem(name: 'Tomada 20A', unit: 'un', price: 16.00, icon: 'outlet'),
+        MaterialDbItem(name: 'Interruptor Simples', unit: 'un', price: 10.00, icon: 'switch'),
+        MaterialDbItem(name: 'Lâmpada LED 9W', unit: 'un', price: 12.90, icon: 'lamp'),
+        MaterialDbItem(name: 'Conduíte corrugado 20mm', unit: 'm', price: 2.50, icon: 'pipe'),
+        MaterialDbItem(name: 'Caixa 4x2', unit: 'un', price: 3.50, icon: 'box'),
+      ];
+
+  static Future<List<MaterialDbItem>> load() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_k);
+
+    // Se nunca salvou nada, devolve seed e já persiste (pra aparecer em todo lugar)
+    if (raw == null || raw.trim().isEmpty) {
+      final base = seed();
+      await save(base);
+      return base;
+    }
+
+    final list = (jsonDecode(raw) as List).cast<dynamic>();
+    final items = list
+        .map((e) => MaterialDbItem.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+
+    // Se por algum motivo ficou vazio, garante seed também
+    if (items.isEmpty) {
+      final base = seed();
+      await save(base);
+      return base;
+    }
+
+    return items;
+  }
+
+  static Future<void> save(List<MaterialDbItem> items) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_k, jsonEncode(items.map((e) => e.toJson()).toList()));
+  }
+
+  static Future<void> add(MaterialDbItem item) async {
+    final list = await load();
+    list.insert(0, item);
+    await save(list);
+  }
+
+  static Future<void> removeAt(int i) async {
+    final list = await load();
+    if (i < 0 || i >= list.length) return;
+    list.removeAt(i);
+    await save(list);
+  }
+}

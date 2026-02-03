@@ -1,0 +1,223 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../services/pro_access.dart';
+
+class PaywallScreen extends StatefulWidget {
+  PaywallScreen({super.key});
+
+  @override
+  State<PaywallScreen> createState() => _PaywallScreenState();
+}
+
+class _PaywallScreenState extends State<PaywallScreen> {
+  bool loading = true;
+  bool hasPro = false;
+  Duration left = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => loading = true);
+    hasPro = await ProAccess.hasProAccessNow();
+    left = await ProAccess.trialRemaining();
+    setState(() => loading = false);
+  }
+
+  Future<void> _activateProDev() async {
+    await ProAccess.setProDev(true);
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('PRO (DEV) ativado ✅')));
+  }
+
+  Future<void> _startTrial() async {
+    // 7 dias de trial real (contando de verdade)
+    await ProAccess.startTrial(duration: const Duration(days: 7));
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Trial iniciado ✅ (7 dias)')));
+  }
+
+  Future<void> _expireTrial() async {
+    await ProAccess.expireTrialNow();
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Trial encerrado ✅')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Desbloquear PRO'),
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text('FG Elétrica PRO',
+                    style: TextStyle(
+                        color: AppTheme.gold,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 22)),
+                const SizedBox(height: 8),
+                Text('• Orçamentos avançados',
+                    style: TextStyle(color: Colors.white.withOpacity(.8))),
+                Text('• Equipamentos + auto-preenchimento',
+                    style: TextStyle(color: Colors.white.withOpacity(.8))),
+                Text('• Ferramentas premium',
+                    style: TextStyle(color: Colors.white.withOpacity(.8))),
+                Text('• Meus Materiais / Meus Serviços',
+                    style: TextStyle(color: Colors.white.withOpacity(.8))),
+                const SizedBox(height: 14),
+                _card(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          hasPro ? 'Status: PRO ativo ✅' : 'Status: FREE',
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      if (!hasPro)
+                        Text(
+                          'Trial: ${ProAccess.formatDuration(left)}',
+                          style: TextStyle(
+                              color: AppTheme.gold,
+                              fontWeight: FontWeight.w900),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _plan(
+                  title: 'Mensal',
+                  badge: 'Popular',
+                  price: 'R\$ 9,90/mês',
+                  onTap: _activateProDev,
+                ),
+                const SizedBox(height: 10),
+                _plan(
+                  title: 'Anual',
+                  badge: 'Melhor custo',
+                  price: 'R\$ 79,90/ano',
+                  onTap: _activateProDev,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _activateProDev,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.gold,
+                            foregroundColor: Colors.black),
+                        child: const Text('Ativar PRO (DEV)'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _startTrial,
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white),
+                        child: const Text('Iniciar Trial (7 dias)'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  onPressed: _expireTrial,
+                  style:
+                      OutlinedButton.styleFrom(foregroundColor: Colors.white70),
+                  child: const Text('Encerrar Trial'),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Obs.: agora o contador é REAL (baseado em DateTime.now). Você também controla via Admin.',
+                  style: TextStyle(color: Colors.white.withOpacity(.65)),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _plan(
+      {required String title,
+      required String badge,
+      required String price,
+      required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: _card(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.gold.withOpacity(.16),
+                          borderRadius: BorderRadius.circular(99),
+                          border:
+                              Border.all(color: AppTheme.gold.withOpacity(.35)),
+                        ),
+                        child: Text(badge,
+                            style: TextStyle(
+                                color: AppTheme.gold,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(price,
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(.75),
+                          fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.white.withOpacity(.6)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+      ),
+      child: child,
+    );
+  }
+}

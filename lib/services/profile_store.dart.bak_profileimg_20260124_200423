@@ -1,0 +1,120 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class AppProfile {
+  final String name;
+  final String phone;
+  final String email;
+  final String company;
+
+  // extras
+  final String level;        // Iniciante / Intermediário / Avançado
+  final String specialty;    // ex: Autônomo, Residencial, Predial
+  final double radiusKm;     // raio atuação
+  final bool showRadius;     // mostrar no cartão
+  final String bio;          // mini sobre
+
+  // imagens (png base64)
+  final String avatarB64; // foto perfil
+  final String logoB64;   // logo empresa
+
+  AppProfile({
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.company,
+    required this.level,
+    required this.specialty,
+    required this.radiusKm,
+    required this.showRadius,
+    required this.bio,
+    required this.avatarB64,
+    required this.logoB64,
+  });
+}
+
+class ProfileStore {
+  static const _k = 'profile_v2';
+
+  static AppProfile _defaults() => AppProfile(
+        name: 'Felype Guimarães',
+        phone: '',
+        email: '',
+        company: 'FG Elétrica',
+        level: 'Iniciante',
+        specialty: 'Autônomo',
+        radiusKm: 1.0,
+        showRadius: true,
+        bio: '',
+        avatarB64: '',
+        logoB64: '',
+      );
+
+  static Future<AppProfile> get() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_k);
+    if (raw == null || raw.trim().isEmpty) return _defaults();
+
+    try {
+      final j = jsonDecode(raw);
+      if (j is Map) {
+        double toD(v, double fb) {
+          if (v == null) return fb;
+          if (v is num) return v.toDouble();
+          return double.tryParse(v.toString().replaceAll(',', '.')) ?? fb;
+        }
+
+        return AppProfile(
+          name: (j['name'] ?? _defaults().name).toString(),
+          phone: (j['phone'] ?? '').toString(),
+          email: (j['email'] ?? '').toString(),
+          company: (j['company'] ?? _defaults().company).toString(),
+
+          level: (j['level'] ?? _defaults().level).toString(),
+          specialty: (j['specialty'] ?? _defaults().specialty).toString(),
+          radiusKm: toD(j['radiusKm'], _defaults().radiusKm),
+          showRadius: (j['showRadius'] ?? _defaults().showRadius) == true,
+          bio: (j['bio'] ?? '').toString(),
+
+          avatarB64: (j['avatarB64'] ?? '').toString(),
+          logoB64: (j['logoB64'] ?? '').toString(),
+        );
+      }
+    } catch (_) {}
+
+    return _defaults();
+  }
+
+  static Future<void> set({
+    required String name,
+    required String phone,
+    required String email,
+    required String company,
+    String? level,
+    String? specialty,
+    double? radiusKm,
+    bool? showRadius,
+    String? bio,
+    String? avatarB64,
+    String? logoB64,
+  }) async {
+    final cur = await get();
+    final p = await SharedPreferences.getInstance();
+
+    final data = jsonEncode({
+      'name': name.trim(),
+      'phone': phone.trim(),
+      'email': email.trim(),
+      'company': company.trim(),
+      'level': (level ?? cur.level).trim(),
+      'specialty': (specialty ?? cur.specialty).trim(),
+      'radiusKm': radiusKm ?? cur.radiusKm,
+      'showRadius': showRadius ?? cur.showRadius,
+      'bio': (bio ?? cur.bio).trim(),
+      'avatarB64': (avatarB64 ?? cur.avatarB64).trim(),
+      'logoB64': (logoB64 ?? cur.logoB64).trim(),
+    });
+
+    await p.setString(_k, data);
+  }
+}

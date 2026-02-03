@@ -1,0 +1,240 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+
+class ServicesProScreen extends StatelessWidget {
+  const ServicesProScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <_Svc>[
+      _Svc(
+        title: 'Troca de fiação (por cômodo)',
+        questions: const [
+          _Q('Quantos cômodos?', 'comodos', hint: 'Ex: 3'),
+          _Q('m² por cômodo (média)', 'm2', hint: 'Ex: 12'),
+          _Q('Pontos de tomada por cômodo', 'tomadas', hint: 'Ex: 4'),
+          _Q('Pontos de luz por cômodo', 'luzes', hint: 'Ex: 2'),
+        ],
+        calc: (m) {
+          final comodos = m['comodos'] ?? 1;
+          final m2 = m['m2'] ?? 10;
+          final tomadas = m['tomadas'] ?? 3;
+          final luzes = m['luzes'] ?? 2;
+          final v = (comodos * 450) + (m2 * comodos * 8) + (tomadas * comodos * 25) + (luzes * comodos * 20);
+          return v;
+        },
+      ),
+      _Svc(
+        title: 'Circuito dedicado p/ Ar-condicionado',
+        questions: const [
+          _Q('BTU do ar (ex: 12000)', 'btu', hint: 'Ex: 12000'),
+          _Q('Distância até o quadro (m)', 'dist', hint: 'Ex: 15'),
+          _Q('Tensão (127 ou 220)', 'v', hint: 'Ex: 220'),
+        ],
+        calc: (m) {
+          final btu = m['btu'] ?? 12000;
+          final dist = m['dist'] ?? 10;
+          final v = m['v'] ?? 220;
+          var valor = 380 + (dist * 12);
+          if (btu >= 18000) valor += 180;
+          if (btu >= 24000) valor += 250;
+          if (v == 127) valor += 90;
+          return valor;
+        },
+      ),
+      _Svc(
+        title: 'Padrão ENEL (127V)',
+        questions: const [
+          _Q('Tipo 1=mono 2=bi 3=tri', 'tipo', hint: 'Ex: 1'),
+          _Q('Entrada aérea? 1=sim 0=não', 'aerea', hint: 'Ex: 1'),
+        ],
+        calc: (m) {
+          final tipo = m['tipo'] ?? 1;
+          final aerea = (m['aerea'] ?? 1) == 1;
+          var valor = 950;
+          if (tipo == 2) valor += 250;
+          if (tipo == 3) valor += 450;
+          if (!aerea) valor += 200;
+          return valor;
+        },
+      ),
+      _Svc(
+        title: 'Padrão ENEL (220V)',
+        questions: const [
+          _Q('Tipo 1=mono 2=bi 3=tri', 'tipo', hint: 'Ex: 2'),
+          _Q('Entrada aérea? 1=sim 0=não', 'aerea', hint: 'Ex: 1'),
+        ],
+        calc: (m) {
+          final tipo = m['tipo'] ?? 2;
+          final aerea = (m['aerea'] ?? 1) == 1;
+          var valor = 1100;
+          if (tipo == 2) valor += 300;
+          if (tipo == 3) valor += 520;
+          if (!aerea) valor += 220;
+          return valor;
+        },
+      ),
+      _Svc(
+        title: 'Instalação de tomadas/luminárias (por ponto)',
+        questions: const [
+          _Q('Quantos pontos?', 'pontos', hint: 'Ex: 8'),
+        ],
+        calc: (m) => (m['pontos'] ?? 1) * 45,
+      ),
+    ];
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Serviços (PRO)'),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, i) {
+          final s = items[i];
+          return InkWell(
+            onTap: () async {
+              final r = await Navigator.push<_WizardResult?>(
+                context,
+                MaterialPageRoute(builder: (_) => _Wizard(svc: s)),
+              );
+              if (r == null) return;
+              if (!context.mounted) return;
+
+              // ✅ VOLTA pro orçamento já com nome + preço sugerido
+              Navigator.pop(context, {
+                'name': s.title,
+                'price': r.value,
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(.12)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.work_outline, color: AppTheme.gold),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      s.title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Wizard extends StatefulWidget {
+  final _Svc svc;
+  const _Wizard({required this.svc});
+
+  @override
+  State<_Wizard> createState() => _WizardState();
+}
+
+class _WizardState extends State<_Wizard> {
+  final Map<String, int> _vals = {};
+
+  int _parse(String s, int fallback) {
+    final v = int.tryParse(s.trim());
+    return v ?? fallback;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: Text(widget.svc.title),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(.12)),
+            ),
+            child: Text(
+              'Responda rapidinho.\nO app sugere um valor comum e você pode ajustar no orçamento.',
+              style: TextStyle(color: Colors.white.withOpacity(.80), height: 1.25),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...widget.svc.questions.map((q) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: q.label,
+                  hintText: q.hint,
+                  filled: true,
+                  fillColor: AppTheme.card,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+                ),
+                onChanged: (t) => _vals[q.key] = _parse(t, 0),
+              ),
+            );
+          }).toList(),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 52,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.gold,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: () {
+                final value = widget.svc.calc(_vals).toDouble();
+                Navigator.pop(context, _WizardResult(value));
+              },
+              icon: const Icon(Icons.auto_fix_high),
+              label: const Text('Gerar sugestão', style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WizardResult {
+  final double value;
+  const _WizardResult(this.value);
+}
+
+class _Q {
+  final String label;
+  final String key;
+  final String? hint;
+  const _Q(this.label, this.key, {this.hint});
+}
+
+class _Svc {
+  final String title;
+  final List<_Q> questions;
+  final int Function(Map<String, int>) calc;
+
+  const _Svc({required this.title, required this.questions, required this.calc});
+}

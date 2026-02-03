@@ -1,0 +1,389 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../widgets/pro_trial_countdown.dart';
+import '../services/profile_store.dart';
+import 'about_screen.dart';
+import 'parceiros_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Timer? _adminHold;
+
+  String _company = 'FG Elétrica';
+  String _name = '';
+
+  static const _kSeenHomeTutorial = 'seen_home_tutorial_v1';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+    _maybeShowTutorialOnce();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final p = await ProfileStore.get();
+      if (!mounted) return;
+      setState(() {
+        _company = (p.company.trim().isEmpty) ? 'FG Elétrica' : p.company.trim();
+        _name = p.name.trim();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _maybeShowTutorialOnce() async {
+    final sp = await SharedPreferences.getInstance();
+    final seen = sp.getBool(_kSeenHomeTutorial) ?? false;
+    if (seen) return;
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Como usar (rápido)'),
+        content: const Text(
+          '• Meu Painel: atalhos principais.\n'
+          '• Equipamentos: alguns itens são PRO.\n'
+          '• Cálculo Elétrico: potência, tensão, distância.\n'
+          '• Conta: configure seu nome e aceite o termo.\n',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Agora não'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.of(context).pushNamed(AppRoutes.tutoriais);
+            },
+            child: const Text('Ver tutoriais'),),
+        ],
+      ),
+    );
+
+    await sp.setBool(_kSeenHomeTutorial, true);
+  }
+
+  @override
+  void dispose() {
+    _adminHold?.cancel();
+    super.dispose();
+  }
+
+  void _go(String route) => Navigator.of(context).pushNamed(route);
+
+  Widget _pill(String text, {Color? bg, Color? fg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg ?? Colors.white.withOpacity(.08),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: AppTheme.border.withOpacity(.25)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: fg ?? Colors.white.withOpacity(.9),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _gridCard(IconData icon, String title, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.border.withOpacity(.35)),
+          boxShadow: const [
+            BoxShadow(blurRadius: 14, offset: Offset(0, 8), color: Color(0x22000000)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.gold.withOpacity(.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+              ),
+              child: Icon(icon, color: AppTheme.gold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 15,
+              ),
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Text('Abrir', style: TextStyle(color: Colors.white.withOpacity(.65), fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _partnersTab() {
+    return const ParceirosScreen();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppTheme.bg,
+        appBar: AppBar(
+          backgroundColor: AppTheme.bg,
+          elevation: 0,
+          titleSpacing: 12,
+          title: Row(
+            children: [
+              Container(
+                height: 38,
+                width: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.card,
+                  border: Border.all(color: AppTheme.border.withOpacity(.35)),
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/logo.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Icon(Icons.bolt, color: AppTheme.gold, size: 22),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // ✅ Segurar 5s no título para abrir Admin
+              GestureDetector(
+                onTapDown: (_) {
+                  _adminHold?.cancel();
+                  _adminHold = Timer(const Duration(seconds: 5), () {
+                    if (!mounted) return;
+                    Navigator.of(context).pushNamed(AppRoutes.admin);
+                  });
+                },
+                onTapUp: (_) => _adminHold?.cancel(),
+                onTapCancel: () => _adminHold?.cancel(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _company,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                    ),
+                    if (_name.isNotEmpty)
+                      Text(
+                        _name,
+                        style: TextStyle(color: Colors.white.withOpacity(.65), fontWeight: FontWeight.w700, fontSize: 12),
+                      ),
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              IconButton(
+                onPressed: () => _go(AppRoutes.tutoriais),
+                icon: const Icon(Icons.help_outline),
+                color: Colors.white.withOpacity(.9),
+                tooltip: 'Tutoriais',
+              ),
+              IconButton(
+                onPressed: () async { await Navigator.of(context).pushNamed(AppRoutes.conta); await _loadProfile(); },
+                icon: const Icon(Icons.account_circle_outlined),
+                color: Colors.white.withOpacity(.9),
+              ),
+            ],
+          ),
+          bottom: TabBar(
+            indicatorColor: AppTheme.gold,
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white.withOpacity(.6),
+            tabs: const [
+              Tab(text: 'Meu Painel'),
+              Tab(text: 'Parceiros'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Status PRO / trial
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.card,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Teste grátis PRO termina em:',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(.78),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                DefaultTextStyle(
+                                  style: TextStyle(
+                                    color: AppTheme.gold,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                  child: const ProTrialCountdown(),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _pill('Plano Mensal'),
+                                    _pill('Oferta Anual',
+                                        bg: AppTheme.gold.withOpacity(.12),
+                                        fg: AppTheme.gold),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.gold,
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            ),
+                            onPressed: () => _go(AppRoutes.paywall),
+                            child: const Text(
+                              'Ver PRO',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // ✅ HOME EM GRADE (2 colunas)
+                    GridView.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.05,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        _gridCard(Icons.receipt_long_outlined, 'Orçamentos', () => _go(AppRoutes.orcamentos)),
+                        _gridCard(Icons.ac_unit, 'Equipamentos', () => _go(AppRoutes.equipamentos)),
+                        _gridCard(Icons.calculate_outlined, 'Cálculo Elétrico', () => _go(AppRoutes.calc)),
+                        _gridCard(Icons.event_note_outlined, 'Agenda', () => _go(AppRoutes.agenda)),
+                        _gridCard(Icons.handyman_outlined, 'Ferramentas', () => _go(AppRoutes.ferramentas)),
+                        _gridCard(Icons.lightbulb_outline, 'Tutoriais', () => _go(AppRoutes.tutoriais)),
+                      ],
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    InkWell(
+                      onTap: () => _go(AppRoutes.orcamentos),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: AppTheme.card,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 16),
+                            Container(
+                              height: 46,
+                              width: 46,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppTheme.gold.withOpacity(.18),
+                                border: Border.all(color: AppTheme.gold.withOpacity(.45)),
+                              ),
+                              child: Icon(Icons.bolt, color: AppTheme.gold),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Text(
+                                'Novo Orçamento',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+                            const SizedBox(width: 14),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _partnersTab(),
+          ],
+        ),
+      ),
+    );
+  }
+}

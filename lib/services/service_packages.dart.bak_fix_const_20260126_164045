@@ -1,0 +1,90 @@
+import '../models/budget_models.dart';
+
+class ServicePackage {
+  final String id;
+  final String title;
+  final String subtitle;
+  final List<BudgetItem> materials;
+  final List<BudgetServiceLine> services;
+  final String obs; // vira uma linha "Obs:" no orçamento
+
+  const ServicePackage({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.materials,
+    required this.services,
+    this.obs = '',
+  });
+
+  void applyTo(BudgetDoc doc) {
+    for (final m in materials) {
+      doc.materials.add(BudgetItem(
+        name: m.name,
+        qty: m.qty,
+        unit: m.unit,
+        unitPrice: m.unitPrice,
+      ));
+    }
+    for (final s in services) {
+      doc.services.add(BudgetServiceLine(
+        name: s.name,
+        price: s.price,
+      ));
+    }
+    if (obs.trim().isNotEmpty) {
+      doc.services.add(BudgetServiceLine(name: 'Obs: ${obs.trim()}', price: 0));
+    }
+  }
+}
+
+class ServicePackages {
+  static const List<ServicePackage> residential = [
+    ServicePackage(
+      id: 'pkg_chuveiro',
+      title: 'Chuveiro completo',
+      subtitle: 'Troca/instalação + proteção + teste',
+      materials: [
+        BudgetItem(name: 'Disjuntor (se necessário)', qty: 1, unit: 'un', unitPrice: 0),
+        BudgetItem(name: 'Conector/terminal', qty: 2, unit: 'un', unitPrice: 0),
+        BudgetItem(name: 'Fita isolante', qty: 1, unit: 'un', unitPrice: 0),
+      ],
+      services: [
+        BudgetServiceLine(name: 'Instalação de chuveiro', price: 120),
+      ],
+      obs: 'Verificar bitola/circuito dedicado e estado do quadro.',
+    ),
+
+    ServicePackage(
+      id: 'pkg_ar_12k',
+      title: 'Circuito Ar 12k (dedicado)',
+      subtitle: 'Novo circuito + disjuntor + teste',
+      materials: [
+        BudgetItem(name: 'Cabo (definir bitola)', qty: 20, unit: 'm', unitPrice: 0),
+        BudgetItem(name: 'Disjuntor dedicado', qty: 1, unit: 'un', unitPrice: 0),
+        BudgetItem(name: 'Eletroduto/canaleta (se necessário)', qty: 10, unit: 'm', unitPrice: 0),
+      ],
+      services: [
+        BudgetServiceLine(name: 'Circuito dedicado p/ Ar-condicionado', price: 380),
+      ],
+      obs: 'Aplicar queda de tensão e conferir padrão de tomada do equipamento.',
+    ),
+
+    ServicePackage(
+      id: 'pkg_quadro_dr_dps',
+      title: 'Quadro: DR + DPS',
+      subtitle: 'Proteções + organização + testes',
+      materials: [
+        BudgetItem(name: 'DR (dimensionar)', qty: 1, unit: 'un', unitPrice: 0),
+        BudgetItem(name: 'DPS (dimensionar)', qty: 1, unit: 'un', unitPrice: 0),
+        BudgetItem(name: 'Barramento/ponteiras', qty: 1, unit: 'kit', unitPrice: 0),
+        BudgetItem(name: 'Etiqueta/identificação', qty: 1, unit: 'kit', unitPrice: 0),
+      ],
+      services: [
+        BudgetServiceLine(name: 'Instalação de DR + DPS', price: 320),
+        BudgetServiceLine(name: 'Organização de quadro', price: 180),
+      ],
+      obs: 'Testar DR (botão + medição) e verificar aterramento.',
+    ),
+  ];
+}

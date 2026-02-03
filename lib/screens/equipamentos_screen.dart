@@ -1,0 +1,394 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../core/app_theme.dart';
+import '../services/pro_access.dart';
+import '../routes/app_routes.dart';
+
+class EquipamentosScreen extends StatefulWidget {
+  const EquipamentosScreen({super.key});
+
+  @override
+  State<EquipamentosScreen> createState() => _EquipamentosScreenState();
+}
+
+class _EquipamentosScreenState extends State<EquipamentosScreen> {
+  bool _loading = true;
+  bool _pro = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await ProAccess.hasProAccessNow();
+    if (!mounted) return;
+    setState(() {
+      _pro = ok;
+      _loading = false;
+    });
+  }
+
+  // Aproximação prática: W ≈ BTU * 0.09 (conservador)
+  int _btuToW(int btu) => (btu * 0.09).round();
+
+  void _goCalcPrefill(
+      {required String title, required int powerW, required int voltage}) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.calc,
+      arguments: {"title": title, "powerW": powerW, "voltage": voltage},
+    );
+  }
+
+  Future<void> _openPaywall() async {
+    await Navigator.of(context).pushNamed(AppRoutes.paywall);
+    await _check();
+  }
+
+  Future<void> _onTapItem(_EquipItem item) async {
+    if (item.proOnly && !_pro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recurso PRO — desbloqueie para usar ✅')),
+      );
+      await _openPaywall();
+      return;
+    }
+    item.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _buildItems();
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+        title: const Text('Equipamentos'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: Text(
+                _loading ? '' : (_pro ? 'PRO' : 'FREE'),
+                style: TextStyle(
+                  color: _pro ? AppTheme.gold : Colors.white70,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _bannerPro(),
+                const SizedBox(height: 14),
+                ...items,
+              ],
+            ),
+    );
+  }
+
+  Widget _proChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppTheme.gold.withOpacity(.16),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+      ),
+      child: Text(
+        'PRO',
+        style: TextStyle(
+            color: AppTheme.gold, fontWeight: FontWeight.w900, fontSize: 12),
+      ),
+    );
+  }
+
+  Widget _bannerPro() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: Row(
+        children: [
+          Icon(_pro ? Icons.verified : Icons.lock_outline,
+              color: _pro ? AppTheme.gold : Colors.white70),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _pro
+                  ? 'PRO ativo ✅  Todos os equipamentos liberados.'
+                  : 'Lista completa: itens FREE e PRO (cadeado).',
+              style: TextStyle(
+                  color: Colors.white.withOpacity(.85),
+                  fontWeight: FontWeight.w800),
+            ),
+          ),
+          if (!_pro)
+            TextButton(
+              onPressed: _openPaywall,
+              child: Text('Ver planos',
+                  style: TextStyle(
+                      color: AppTheme.gold, fontWeight: FontWeight.w900)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildItems() {
+    final list = <Widget>[];
+
+    void section(String t) {
+      list.add(const SizedBox(height: 6));
+      list.add(Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(t,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+      ));
+    }
+
+    void tile(_EquipItem item) {
+      final bool isFree3200 = item.title == "Chuveiro 3200W (127V)";
+      final bool isPro = !isFree3200;
+
+      list.add(_tile(
+        title: item.title,
+        subtitle: isFree3200
+            ? "FREE • toque para preencher no cálculo"
+            : "PRO • exclusivo para assinantes",
+        proOnly: isPro,
+        onTap: () => _onTapItem(item),
+      ));
+    }
+
+    // ----------------- CHUVEIROS (muitas potências) -----------------
+    section('Chuveiros (127V) — potência em W');
+    for (final w in [3200, 3500, 3800, 4000, 4500, 4800, 5000, 5400]) {
+      final isFree = (w == 3200);
+      tile(isFree
+          ? _EquipItem.free(
+              'Chuveiro ${w}W (127V)',
+              'FREE • toque para preencher no cálculo',
+              () => _goCalcPrefill(
+                  title: 'Chuveiro ${w}W', powerW: w, voltage: 127),
+            )
+          : _EquipItem.pro(
+              'Chuveiro ${w}W (127V)',
+              'PRO • exclusivo para assinantes',
+              () => _goCalcPrefill(
+                  title: 'Chuveiro ${w}W', powerW: w, voltage: 127),
+            ));
+    }
+
+    section('Chuveiros (220V) — potência em W');
+    for (final w in [
+      4500,
+      5000,
+      5500,
+      6000,
+      6800,
+      7000,
+      7500,
+      7800,
+      8000,
+      8800
+    ]) {
+      final proOnly = w >= 6800; // exemplo: acima disso PRO
+      tile(proOnly
+          ? _EquipItem.pro(
+              'Chuveiro ${w}W (220V)',
+              'PRO • toque para preencher no cálculo',
+              () => _goCalcPrefill(
+                  title: 'Chuveiro ${w}W', powerW: w, voltage: 220),
+            )
+          : _EquipItem.pro(
+              'Chuveiro ${w}W (220V)',
+              'FREE • toque para preencher no cálculo',
+              () => _goCalcPrefill(
+                  title: 'Chuveiro ${w}W', powerW: w, voltage: 220),
+            ));
+    }
+
+    // ----------------- AR DE JANELA (BTU -> W) -----------------
+    section('Ar de janela (BTU → W) — aproximação');
+    final freeBtu = [7000, 7500, 8000, 9000, 10000, 11000];
+    final proBtu = [12000, 14000, 16000, 18000, 20000, 22000];
+
+    for (final btu in freeBtu) {
+      final w = _btuToW(btu);
+      tile(_EquipItem.pro(
+        'Ar de janela $btu BTU (≈ ${w}W)',
+        'FREE • toque para preencher no cálculo',
+        () => _goCalcPrefill(
+            title: 'Ar de janela $btu BTU', powerW: w, voltage: 220),
+      ));
+    }
+    for (final btu in proBtu) {
+      final w = _btuToW(btu);
+      tile(_EquipItem.pro(
+        'Ar de janela $btu BTU (≈ ${w}W)',
+        'PRO • toque para preencher no cálculo',
+        () => _goCalcPrefill(
+            title: 'Ar de janela $btu BTU', powerW: w, voltage: 220),
+      ));
+    }
+
+    // ----------------- SPRINGER (BTU) -----------------
+    section('Springer (BTU → W) — tabela prática');
+    final springerFree = [9000, 12000];
+    final springerPro = [18000, 24000, 30000, 36000];
+
+    for (final btu in springerFree) {
+      final w = _btuToW(btu);
+      tile(_EquipItem.pro(
+        'Springer $btu BTU (≈ ${w}W)',
+        'FREE • toque para preencher no cálculo',
+        () =>
+            _goCalcPrefill(title: 'Springer $btu BTU', powerW: w, voltage: 220),
+      ));
+    }
+    for (final btu in springerPro) {
+      final w = _btuToW(btu);
+      tile(_EquipItem.pro(
+        'Springer $btu BTU (≈ ${w}W)',
+        'PRO • toque para preencher no cálculo',
+        () =>
+            _goCalcPrefill(title: 'Springer $btu BTU', powerW: w, voltage: 220),
+      ));
+    }
+
+    list.add(const SizedBox(height: 10));
+    list.add(Text(
+      'Obs.: BTU→W é aproximação. Na prática varia por eficiência/inverter. '
+      'Se souber a potência real (W), use ela no cálculo.',
+      style: TextStyle(color: Colors.white.withOpacity(.70)),
+    ));
+
+    return list;
+  }
+
+  Widget _proPill() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppTheme.gold.withOpacity(.14),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+      ),
+      child: Text('PRO',
+          style: TextStyle(
+              color: AppTheme.gold, fontWeight: FontWeight.w900, fontSize: 12)),
+    );
+  }
+
+  Widget _tile({
+    required String title,
+    required String subtitle,
+    required bool proOnly,
+    required VoidCallback onTap,
+  }) {
+    final locked = proOnly && !_pro;
+
+    return InkWell(
+      onTap: () async {
+        if (locked) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Recurso PRO — desbloqueie para usar ✅')),
+          );
+          await Navigator.of(context).pushNamed(AppRoutes.paywall);
+          return;
+        }
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(.12)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              locked ? Icons.lock : Icons.flash_on,
+              color: locked ? Colors.white70 : AppTheme.gold,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: TextStyle(color: Colors.white.withOpacity(.65))),
+                  if (proOnly) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.gold.withOpacity(.14),
+                          borderRadius: BorderRadius.circular(99),
+                          border:
+                              Border.all(color: AppTheme.gold.withOpacity(.35)),
+                        ),
+                        child: Text(
+                          'PRO',
+                          style: TextStyle(
+                            color: AppTheme.gold,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (proOnly) ...[
+              const SizedBox(width: 8),
+              _proChip(),
+            ],
+            Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EquipItem {
+  final String title;
+  final String subtitle;
+  final bool proOnly;
+  final VoidCallback onTap;
+
+  const _EquipItem._(this.title, this.subtitle, this.proOnly, this.onTap);
+
+  factory _EquipItem.free(String title, String subtitle, VoidCallback onTap) =>
+      _EquipItem._(title, subtitle, false, onTap);
+
+  factory _EquipItem.pro(String title, String subtitle, VoidCallback onTap) =>
+      _EquipItem._(title, subtitle, true, onTap);
+}

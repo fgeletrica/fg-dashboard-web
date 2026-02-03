@@ -1,0 +1,184 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../services/pro_access.dart';
+import '../services/service_pricing_store.dart';
+
+class ServicePricingScreen extends StatefulWidget {
+  const ServicePricingScreen({super.key});
+
+  @override
+  State<ServicePricingScreen> createState() => _ServicePricingScreenState();
+}
+
+class _ServicePricingScreenState extends State<ServicePricingScreen> {
+  final _mult = TextEditingController(text: '1.00');
+  final _min = TextEditingController(text: '60.00');
+  final _visit = TextEditingController(text: '0.00');
+  final _km = TextEditingController(text: '0.00');
+  final _urg = TextEditingController(text: '1.20');
+  final _night = TextEditingController(text: '1.35');
+
+  double _d(TextEditingController c, double fb) =>
+      double.tryParse(c.text.trim().replaceAll(',', '.')) ?? fb;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final p = await ServicePricingStore.get();
+    if (!mounted) return;
+    setState(() {
+      _mult.text = p.multiplier.toStringAsFixed(2);
+      _min.text = p.minService.toStringAsFixed(2);
+      _visit.text = p.visitFee.toStringAsFixed(2);
+      _km.text = p.kmRate.toStringAsFixed(2);
+      _urg.text = p.urgentMult.toStringAsFixed(2);
+      _night.text = p.nightMult.toStringAsFixed(2);
+    });
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(.12)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(.12)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppTheme.gold.withOpacity(.65)),
+        ),
+      );
+
+  Future<void> _save() async {
+    final has = await ProAccess.hasProAccessNow();
+    if (!has) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recurso PRO — desbloqueie ✅')),
+      );
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    final p = ServicePricing(
+      multiplier: _d(_mult, 1.0),
+      minService: _d(_min, 60.0),
+      visitFee: _d(_visit, 0.0),
+      kmRate: _d(_km, 0.0),
+      urgentMult: _d(_urg, 1.20),
+      nightMult: _d(_night, 1.35),
+    );
+
+    await ServicePricingStore.set(p);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Tabela salva ✅')),
+    );
+    Navigator.pop(context);
+  }
+
+  @override
+  void dispose() {
+    _mult.dispose();
+    _min.dispose();
+    _visit.dispose();
+    _km.dispose();
+    _urg.dispose();
+    _night.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Tabela de preços (PRO)'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _hint(
+            'Aqui é o seu “padrão” de preço.\n'
+            'O app aplica automaticamente no wizard e no catálogo.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _mult,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _dec('Multiplicador geral (ex: 1.10)'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _min,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _dec('Mínimo por serviço (R$)'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _visit,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _dec('Taxa de visita (R$)'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _km,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _dec('Taxa por km (R$/km)'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _urg,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _dec('Multiplicador urgência (ex: 1.20)'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _night,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _dec('Multiplicador noite/madrugada (ex: 1.35)'),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: _save,
+              child: const Text('Salvar',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hint(String t) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: Text(
+        t,
+        style: TextStyle(
+          color: Colors.white.withOpacity(.78),
+          fontWeight: FontWeight.w600,
+          height: 1.25,
+        ),
+      ),
+    );
+  }
+}

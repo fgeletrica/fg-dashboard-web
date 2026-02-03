@@ -1,0 +1,439 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../services/profile_store.dart';
+import '../services/pro_access.dart';
+
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({super.key});
+
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _name = TextEditingController();
+  final _company = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+
+  final _specialty = TextEditingController();
+  String _level = 'Iniciante';
+  final _bio = TextEditingController();
+
+  bool _loading = true;
+  bool _hasPro = false;
+  bool _termsAccepted = false;
+
+  String _avatarB64 = '';
+  String _coverB64 = '';
+
+  static const _kTerms = 'terms_accepted_v1';
+  final _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _company.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _specialty.dispose();
+    _bio.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+
+    final p = await ProfileStore.get();
+    final pro = await ProAccess.hasProAccessNow();
+    final sp = await SharedPreferences.getInstance();
+    final terms = sp.getBool(_kTerms) ?? false;
+
+    _name.text = p.name;
+    _company.text = p.company;
+    _phone.text = p.phone;
+    _email.text = p.email;
+    _specialty.text = p.specialty;
+    _level = p.level.isEmpty ? 'Iniciante' : p.level;
+    _bio.text = p.bio;
+
+    _avatarB64 = p.avatarB64;
+    _coverB64 = p.coverB64;
+
+    if (!mounted) return;
+    setState(() {
+      _hasPro = pro;
+      _termsAccepted = terms;
+      _loading = false;
+    });
+  }
+
+  Future<void> _openPaywall() async {
+    await Navigator.of(context).pushNamed(AppRoutes.paywall);
+    await _load();
+  }
+
+  Uint8List? _b64ToBytes(String b64) {
+    try {
+      final t = b64.trim();
+      if (t.isEmpty) return null;
+      return base64Decode(t);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (x == null) return;
+    final bytes = await x.readAsBytes();
+    final b64 = base64Encode(bytes);
+    await ProfileStore.setAvatar(b64);
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto/Logo atualizada ✅')));
+  }
+
+  Future<void> _pickCover() async {
+    final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (x == null) return;
+    final bytes = await x.readAsBytes();
+    final b64 = base64Encode(bytes);
+    await ProfileStore.setCover(b64);
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Capa atualizada ✅')));
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Você precisa aceitar o termo para continuar.')),
+      );
+      return;
+    }
+
+    await ProfileStore.set(
+      name: _name.text,
+      phone: _phone.text,
+      email: _email.text,
+      company: _company.text,
+      specialty: _specialty.text,
+      level: _level,
+      bio: _bio.text,
+    );
+
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kTerms, _termsAccepted);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Conta salva ✅')));
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(.75), fontWeight: FontWeight.w700),
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(.12))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppTheme.gold.withOpacity(.65))),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final coverBytes = _b64ToBytes(_coverB64);
+    final avatarBytes = _b64ToBytes(_avatarB64);
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Minha Conta'),
+        actions: [
+          TextButton(
+            onPressed: _save,
+            child: const Text('SALVAR', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                // HEADER grande (igual vibe da tua referência)
+                SizedBox(
+                  height: 240,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: coverBytes == null
+                            ? Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [Color(0xFF1A2230), Color(0xFF0E141E)],
+                                  ),
+                                ),
+                              )
+                            : Image.memory(coverBytes, fit: BoxFit.cover),
+                      ),
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.black.withOpacity(.15), Colors.black.withOpacity(.65)],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 18,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            GestureDetector(
+                              onTap: _pickAvatar,
+                              child: CircleAvatar(
+                                radius: 44,
+                                backgroundColor: Colors.white.withOpacity(.12),
+                                child: CircleAvatar(
+                                  radius: 40,
+                                  backgroundColor: AppTheme.card,
+                                  backgroundImage: avatarBytes == null ? null : MemoryImage(avatarBytes),
+                                  child: avatarBytes == null
+                                      ? Icon(Icons.person, size: 38, color: AppTheme.gold)
+                                      : null,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _company.text.trim().isEmpty ? 'Sua Empresa' : _company.text.trim(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _name.text.trim().isEmpty ? 'Seu nome' : _name.text.trim(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: Colors.white.withOpacity(.85), fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      _badge(_hasPro ? 'PRO' : 'FREE', pro: _hasPro),
+                                      const SizedBox(width: 8),
+                                      _badge(_level, pro: false),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        right: 16,
+                        bottom: 18,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 42,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.gold,
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                onPressed: _pickCover,
+                                icon: const Icon(Icons.photo_camera_outlined),
+                                label: const Text('Editar Capa', style: TextStyle(fontWeight: FontWeight.w900)),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              height: 42,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  side: BorderSide(color: Colors.white.withOpacity(.25)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                onPressed: _pickAvatar,
+                                icon: const Icon(Icons.edit),
+                                label: const Text('Editar', style: TextStyle(fontWeight: FontWeight.w900)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _name,
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe seu nome' : null,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _dec('Nome e sobrenome'),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _company,
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe a empresa' : null,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _dec('Empresa'),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _specialty,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _dec('Especialidade (ex: Autônomo)'),
+                        ),
+                        const SizedBox(height: 12),
+
+                        DropdownButtonFormField<String>(
+                          value: _level,
+                          decoration: _dec('Nível'),
+                          dropdownColor: AppTheme.card,
+                          style: const TextStyle(color: Colors.white),
+                          items: const [
+                            DropdownMenuItem(value: 'Iniciante', child: Text('Iniciante')),
+                            DropdownMenuItem(value: 'Intermediário', child: Text('Intermediário')),
+                            DropdownMenuItem(value: 'Avançado', child: Text('Avançado')),
+                          ],
+                          onChanged: (v) => setState(() => _level = v ?? 'Iniciante'),
+                        ),
+
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _phone,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _dec('Telefone (opcional)'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _email,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _dec('E-mail (opcional)'),
+                        ),
+
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _bio,
+                          maxLines: 3,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _dec('Sobre (mini bio — opcional)'),
+                        ),
+
+                        const SizedBox(height: 12),
+                        CheckboxListTile(
+                          value: _termsAccepted,
+                          onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+                          title: const Text('Li e aceito o termo de uso'),
+                          subtitle: Text(
+                            'O app ajuda no dimensionamento, mas não substitui projeto/ART.',
+                            style: TextStyle(color: Colors.white.withOpacity(.70)),
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        if (!_hasPro)
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.gold,
+                                foregroundColor: Colors.black,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: _openPaywall,
+                              child: const Text('Ativar PRO', style: TextStyle(fontWeight: FontWeight.w900)),
+                            ),
+                          )
+                        else
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: BorderSide(color: AppTheme.gold.withOpacity(.35)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: _openPaywall,
+                              child: const Text('Gerenciar PRO', style: TextStyle(fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+
+                        const SizedBox(height: 18),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _badge(String text, {required bool pro}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: pro ? AppTheme.gold.withOpacity(.16) : Colors.white.withOpacity(.08),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: (pro ? AppTheme.gold : Colors.white70).withOpacity(.35)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: pro ? AppTheme.gold : Colors.white70,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}

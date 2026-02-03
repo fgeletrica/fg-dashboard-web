@@ -1,0 +1,106 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class MaterialDbItem {
+  String name;
+  String brand;
+  String unit; // m, un, kg...
+  double price;
+  String imageUrl; // pode ser vazio; URL http(s) ou ""
+
+  MaterialDbItem({
+    required this.name,
+    required this.unit,
+    required this.price,
+    this.brand = '',
+    this.imageUrl = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        "name": name,
+        "brand": brand,
+        "unit": unit,
+        "price": price,
+        "imageUrl": imageUrl,
+      };
+
+  static MaterialDbItem fromJson(Map<String, dynamic> j) => MaterialDbItem(
+        name: (j["name"] ?? "").toString(),
+        brand: (j["brand"] ?? "").toString(),
+        unit: (j["unit"] ?? "un").toString(),
+        price: (j["price"] is num) ? (j["price"] as num).toDouble() : 0.0,
+        imageUrl: (j["imageUrl"] ?? "").toString(),
+      );
+}
+
+class MaterialsStore {
+  static const _k = 'materials_db_v2'; // v2 por causa de brand/image
+
+  static Future<List<MaterialDbItem>> load() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_k);
+
+    // migração simples do v1 -> v2 (se existir)
+    if ((raw == null || raw.trim().isEmpty)) {
+      final legacy = p.getString('materials_db_v1');
+      if (legacy != null && legacy.trim().isNotEmpty) {
+        await p.setString(_k, legacy);
+      }
+    }
+
+    final raw2 = p.getString(_k);
+    if (raw2 == null || raw2.trim().isEmpty) return [];
+    final list = (jsonDecode(raw2) as List).cast<dynamic>();
+    return list
+        .map((e) => MaterialDbItem.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  static Future<void> save(List<MaterialDbItem> items) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_k, jsonEncode(items.map((e) => e.toJson()).toList()));
+  }
+
+  static Future<void> add(MaterialDbItem item) async {
+    final list = await load();
+    list.insert(0, item);
+    await save(list);
+  }
+
+  static Future<void> updateAt(int i, MaterialDbItem item) async {
+    final list = await load();
+    if (i < 0 || i >= list.length) return;
+    list[i] = item;
+    await save(list);
+  }
+
+  static Future<void> removeAt(int i) async {
+    final list = await load();
+    if (i < 0 || i >= list.length) return;
+    list.removeAt(i);
+    await save(list);
+  }
+
+  static Future<void> seedIfEmpty() async {
+    final list = await load();
+    if (list.isNotEmpty) return;
+
+    // Imagens: pode deixar vazio (usa ícone), ou colar URL depois no editar.
+    // Coloquei brand + preço base (você edita depois).
+    final seed = <MaterialDbItem>[
+      MaterialDbItem(name: "Cabo flexível 750V 1,5mm² (preto)", brand: "Megatron", unit: "m", price: 6.90, imageUrl: ""),
+      MaterialDbItem(name: "Cabo flexível 750V 2,5mm² (azul)", brand: "Megatron", unit: "m", price: 9.90, imageUrl: ""),
+      MaterialDbItem(name: "Cabo flexível 750V 4mm² (vermelho)", brand: "Megatron", unit: "m", price: 16.90, imageUrl: ""),
+      MaterialDbItem(name: "Disjuntor 1P 20A curva C", brand: "Steck", unit: "un", price: 39.90, imageUrl: ""),
+      MaterialDbItem(name: "Disjuntor 2P 32A curva C", brand: "Steck", unit: "un", price: 79.90, imageUrl: ""),
+      MaterialDbItem(name: "Tomada 2P+T 10A", brand: "Tramontina", unit: "un", price: 9.90, imageUrl: ""),
+      MaterialDbItem(name: "Interruptor simples", brand: "Tramontina", unit: "un", price: 8.90, imageUrl: ""),
+      MaterialDbItem(name: "Caixa 4x2 embutir", brand: "Tigre", unit: "un", price: 4.90, imageUrl: ""),
+      MaterialDbItem(name: "Caixa 4x4 embutir", brand: "Tigre", unit: "un", price: 6.90, imageUrl: ""),
+      MaterialDbItem(name: "Eletroduto corrugado 20mm", brand: "Tigre", unit: "m", price: 3.50, imageUrl: ""),
+      MaterialDbItem(name: "Fita isolante 19mm", brand: "3M", unit: "un", price: 12.90, imageUrl: ""),
+    ];
+
+    await save(seed);
+  }
+}

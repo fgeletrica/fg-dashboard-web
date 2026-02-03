@@ -1,0 +1,113 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../core/app_theme.dart';
+import '../services/auth/auth_service.dart';
+
+class ServicesMarketScreen extends StatefulWidget {
+  const ServicesMarketScreen({super.key});
+
+  @override
+  State<ServicesMarketScreen> createState() => _ServicesMarketScreenState();
+}
+
+class _ServicesMarketScreenState extends State<ServicesMarketScreen> {
+  final _sb = Supabase.instance.client;
+
+  String _role = 'client';
+  bool _loadingRole = true;
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+    _authSub = _sb.auth.onAuthStateChange.listen((_) => _loadRole());
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadRole() async {
+    if (!mounted) return;
+    setState(() => _loadingRole = true);
+    try {
+      final r = await AuthService.getMyRole();
+      if (!mounted) return;
+      setState(() {
+        _role = r == 'pro' ? 'pro' : 'client';
+        _loadingRole = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _role = 'client';
+        _loadingRole = false;
+      });
+    }
+  }
+
+  bool get _isPro => _role == 'pro';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        title: const Text('Marketplace de Serviços'),
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+      ),
+      body: _loadingRole
+          ? const Center(child: CircularProgressIndicator())
+          : DefaultTabController(
+              length: _isPro ? 2 : 1,
+              child: Column(
+                children: [
+                  if (_isPro)
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+                      ),
+                      child: TabBar(
+                        indicatorColor: AppTheme.gold,
+                        labelColor: Colors.white,
+                        unselectedLabelColor: Colors.white.withOpacity(.65),
+                        tabs: const [
+                          Tab(text: 'Sou Cliente'),
+                          Tab(text: 'Sou Profissional'),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person, color: AppTheme.gold),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Você está como Cliente',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(.92),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],

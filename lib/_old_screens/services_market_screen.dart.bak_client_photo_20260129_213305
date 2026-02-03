@@ -1,0 +1,675 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../core/app_theme.dart';
+import '../services/auth/auth_service.dart';
+
+class ServicesMarketScreen extends StatefulWidget {
+  const ServicesMarketScreen({super.key});
+
+  @override
+  State<ServicesMarketScreen> createState() => _ServicesMarketScreenState();
+}
+
+class _ServicesMarketScreenState extends State<ServicesMarketScreen> {
+  final _sb = Supabase.instance.client;
+
+  String _role = 'client';
+  bool _loadingRole = true;
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+    _authSub = _sb.auth.onAuthStateChange.listen((_) => _loadRole());
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadRole() async {
+    if (!mounted) return;
+    setState(() => _loadingRole = true);
+    try {
+      final r = await AuthService.getMyRole();
+      if (!mounted) return;
+      setState(() {
+        _role = r == 'pro' ? 'pro' : 'client';
+        _loadingRole = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _role = 'client';
+        _loadingRole = false;
+      });
+    }
+  }
+
+  bool get _isPro => _role == 'pro';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        title: const Text('Marketplace de Serviços'),
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+      ),
+      body: _loadingRole
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.card,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppTheme.border.withOpacity(.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(_isPro ? Icons.engineering : Icons.person,
+                          color: AppTheme.gold),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _isPro
+                              ? 'Você está como Profissional'
+                              : 'Você está como Cliente',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(.92),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _isPro ? _ProTab(sb: _sb) : _ClientTab(sb: _sb),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _ClientTab extends StatefulWidget {
+  final SupabaseClient sb;
+  const _ClientTab({required this.sb});
+
+  @override
+  State<_ClientTab> createState() => _ClientTabState();
+}
+
+class _ClientTabState extends State<_ClientTab> {
+  bool _loading = true;
+  String? _err;
+  List<Map<String, dynamic>> _items = [];
+
+  Future<Map<String, dynamic>> _myProfile() async {
+    final u = AuthService.user;
+    if (u == null) throw Exception('Usuário não logado');
+    final prof = await widget.sb
+        .from('profiles')
+        .select('name, city, phone')
+        .eq('id', u.id)
+        .maybeSingle();
+    return (prof ?? {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
+
+    try {
+      final u = AuthService.user;
+      if (u == null) throw Exception('Usuário não logado');
+
+      final res = await widget.sb
+          .from('service_requests')
+          .select(
+              'id, created_at, title, city, done, client_rating, client_review')
+          .eq('user_id', u.id)
+          .order('created_at', ascending: false);
+
+      setState(() {
+        _items = List<Map<String, dynamic>>.from(res as List);
+      });
+    } catch (e) {
+      setState(() => _err = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // === CLIENT_REVIEW_V1 ===
+  Future<void> _askReviewAndComplete(String id, String title) async {
+    int rating = 5;
+    final ctrl = TextEditingController();
+
+    Future<void> submit() async {
+      try {
+        await widget.sb.from('service_requests').update({
+          'done': true,
+          'client_rating': rating,
+          'client_review': ctrl.text.trim(),
+          'reviewed_at': DateTime.now().toIso8601String(),
+        }).eq('id', id);
+
+        if (!mounted) return;
+        Navigator.pop(context);
+        await _load();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Concluído e avaliado ✅')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao salvar avaliação: $e')),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) {
+          Widget star(int i) {
+            final on = i <= rating;
+            return IconButton(
+              onPressed: () => setLocal(() => rating = i),
+              icon: Icon(on ? Icons.star : Icons.star_border),
+              color: on ? AppTheme.gold : Colors.white.withOpacity(.55),
+              tooltip: '$i',
+            );
+          }
+
+          return AlertDialog(
+            backgroundColor: AppTheme.card,
+            title: const Text(
+              'Avaliar serviço',
+              style:
+                  TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.isEmpty ? 'Pedido concluído' : title,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(.9),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Nota:',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(.8),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Row(children: [star(1), star(2), star(3), star(4), star(5)]),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: ctrl,
+                    maxLines: 3,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700),
+                    decoration: InputDecoration(
+                      labelText: 'Comentário (opcional)',
+                      labelStyle:
+                          TextStyle(color: Colors.white.withOpacity(.7)),
+                      filled: true,
+                      fillColor: AppTheme.bg,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide:
+                            BorderSide(color: AppTheme.border.withOpacity(.35)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide:
+                            BorderSide(color: AppTheme.gold.withOpacity(.8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Dica: essa avaliação ajuda a melhorar o Marketplace.',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(.65),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  try {
+                    await widget.sb
+                        .from('service_requests')
+                        .update({'done': true}).eq('id', id);
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    await _load();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Concluído ✅')),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erro: $e')),
+                    );
+                  }
+                },
+                child: const Text('Pular'),
+              ),
+              FilledButton(
+                onPressed: submit,
+                child: const Text('Salvar',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _createRequest() async {
+    final title = TextEditingController();
+    final desc = TextEditingController();
+
+    Future<void> go() async {
+      try {
+        final u = AuthService.user;
+        if (u == null) throw Exception('Usuário não logado');
+
+        final prof = await _myProfile();
+        final name = (prof['name'] ?? '').toString().trim();
+        final city = (prof['city'] ?? '').toString().trim();
+        final phone = (prof['phone'] ?? '').toString().trim();
+
+        if (phone.isEmpty) {
+          throw Exception(
+              'Seu WhatsApp está vazio. Vá em Minha Conta e preencha.');
+        }
+
+        await widget.sb.from('service_requests').insert({
+          'user_id': u.id,
+          'title': title.text.trim(),
+          'description': desc.text.trim(),
+          'city': city,
+          'contact_name': name,
+          'contact_phone': phone,
+          'done': false,
+        });
+
+        if (!mounted) return;
+        Navigator.pop(context);
+        await _load();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao criar: $e')),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.card,
+        title: const Text('Novo Pedido',
+            style: TextStyle(fontWeight: FontWeight.w900)),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: 'Título')),
+              const SizedBox(height: 8),
+              TextField(
+                  controller: desc,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: 'Descrição')),
+              const SizedBox(height: 10),
+              Text(
+                'Obs: Cidade e WhatsApp vêm da sua Conta automaticamente.',
+                style: TextStyle(
+                    color: Colors.white.withOpacity(.75),
+                    fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton(onPressed: go, child: const Text('Publicar')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _markDone(String id, String title) async {
+    await _askReviewAndComplete(id, title);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.gold,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: _createRequest,
+              icon: const Icon(Icons.add),
+              label: const Text('Novo pedido',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _err != null
+                  ? Center(
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(_err!,
+                              style: const TextStyle(color: Colors.red))))
+                  : _items.isEmpty
+                      ? Center(
+                          child: Text(
+                              'Você ainda não criou pedidos.\nToque em “Novo pedido”.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(.8),
+                                  fontWeight: FontWeight.w800)))
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                          itemCount: _items.length,
+                          itemBuilder: (_, i) {
+                            final it = _items[i];
+                            final id = (it['id'] ?? '').toString();
+                            final done = (it['done'] == true);
+
+                            return Card(
+                              color: AppTheme.card,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text((it['title'] ?? '').toString(),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white)),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                        'Cidade: ${(it['city'] ?? '').toString()}',
+                                        style: TextStyle(
+                                            color:
+                                                Colors.white.withOpacity(.75),
+                                            fontWeight: FontWeight.w700)),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        _pill(done ? 'Concluído' : 'Aberto'),
+                                        const Spacer(),
+                                        if (!done)
+                                          TextButton.icon(
+                                            onPressed: () => _markDone(id,
+                                                (it['title'] ?? '').toString()),
+                                            icon: const Icon(Icons.check),
+                                            label:
+                                                const Text('Marcar concluído'),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+        ),
+      ],
+    );
+  }
+
+  Widget _pill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.border.withOpacity(.25)),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              color: Colors.white.withOpacity(.85),
+              fontWeight: FontWeight.w900,
+              fontSize: 12)),
+    );
+  }
+}
+
+class _ProTab extends StatefulWidget {
+  final SupabaseClient sb;
+  const _ProTab({required this.sb});
+
+  @override
+  State<_ProTab> createState() => _ProTabState();
+}
+
+class _ProTabState extends State<_ProTab> {
+  bool _loading = true;
+  String? _err;
+  List<Map<String, dynamic>> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
+
+    try {
+      final res = await widget.sb
+          .from('service_requests')
+          .select(
+              'id, created_at, title, description, city, contact_name, contact_phone, done, profiles(avatar_url)')
+          .eq('done', false)
+          .order('created_at', ascending: false);
+
+      setState(() => _items = List<Map<String, dynamic>>.from(res as List));
+    } catch (e) {
+      setState(() => _err = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _openWhatsApp(String phone, String title) async {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return;
+    final msg = Uri.encodeComponent(
+        'Olá! Vi seu pedido no Marketplace: "$title". Posso te ajudar?');
+    final uri = Uri.parse('https://wa.me/55$digits?text=$msg');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_err != null)
+      return Center(
+          child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_err!, style: const TextStyle(color: Colors.red))));
+
+    if (_items.isEmpty) {
+      return Center(
+          child: Text('Sem pedidos abertos agora.',
+              style: TextStyle(
+                  color: Colors.white.withOpacity(.8),
+                  fontWeight: FontWeight.w800)));
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+        itemCount: _items.length,
+        itemBuilder: (_, i) {
+          final it = _items[i];
+          final title = (it['title'] ?? '').toString();
+          final desc = (it['description'] ?? '').toString();
+          final city = (it['city'] ?? '').toString();
+          final name = (it['contact_name'] ?? '').toString();
+          final phone = (it['contact_phone'] ?? '').toString();
+
+          // === PRO_AVATAR_IN_CARD_V3 (scope correto) ===
+          final prof = it['profiles'];
+          final avatar =
+              (prof is Map) ? ((prof['avatar_url'] ?? '').toString()) : '';
+
+          // === PRO_AVATAR_IN_CARD_V1 ===
+          return Card(
+            color: AppTheme.card,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // === PRO_AVATAR_IN_CARD_V1 ===
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Colors.white.withOpacity(.08),
+                        backgroundImage:
+                            avatar.trim().isEmpty ? null : NetworkImage(avatar),
+                        child: avatar.trim().isEmpty
+                            ? const Icon(Icons.person,
+                                size: 18, color: Colors.white)
+                            : null,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 6),
+                  if (desc.trim().isNotEmpty)
+                    Text(desc,
+                        style: TextStyle(color: Colors.white.withOpacity(.75))),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _pill('Cidade: $city'),
+                      _pill('Cliente: $name'),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.gold,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: phone.trim().isEmpty
+                          ? null
+                          : () => _openWhatsApp(phone, title),
+                      icon: const Icon(Icons.chat),
+                      label: Text(
+                          phone.trim().isEmpty
+                              ? 'Cliente sem WhatsApp'
+                              : 'Chamar no WhatsApp',
+                          style: const TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _pill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.border.withOpacity(.25)),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              color: Colors.white.withOpacity(.85),
+              fontWeight: FontWeight.w800,
+              fontSize: 12)),
+    );
+  }
+}

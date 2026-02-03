@@ -1,0 +1,359 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../services/pro_access.dart';
+import '../services/materials_store.dart';
+
+class MaterialsScreen extends StatefulWidget {
+  const MaterialsScreen({super.key});
+
+  @override
+  State<MaterialsScreen> createState() => _MaterialsScreenState();
+}
+
+class _MaterialsScreenState extends State<MaterialsScreen> {
+  bool loading = true;
+  bool pro = false;
+
+  List<MaterialDbItem> items = [];
+
+  final nameCtrl = TextEditingController();
+  final unitCtrl = TextEditingController(text: 'un');
+  final priceCtrl = TextEditingController(text: '0');
+  String _icon = 'build';
+
+  static const _bg = Color(0xFF0E1116);
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAndLoad();
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    unitCtrl.dispose();
+    priceCtrl.dispose();
+    super.dispose();
+  }
+
+  double _toDouble(String s) => double.tryParse(s.replaceAll(',', '.').trim()) ?? 0;
+
+  Future<void> _checkAndLoad() async {
+    pro = await ProAccess.hasProAccessNow();
+    items = await MaterialsStore.load();
+    if (!mounted) return;
+    setState(() => loading = false);
+  }
+
+  Future<void> _reload() async {
+    items = await MaterialsStore.load();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _add() async {
+    if (!pro) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ative o PRO para cadastrar materiais.')));
+      return;
+    }
+    final n = nameCtrl.text.trim();
+    final u = unitCtrl.text.trim().isEmpty ? 'un' : unitCtrl.text.trim();
+    final p = _toDouble(priceCtrl.text);
+    if (n.isEmpty) return;
+
+    await MaterialsStore.add(MaterialDbItem(name: n, unit: u, price: p, icon: _icon));
+    nameCtrl.clear();
+    unitCtrl.text = 'un';
+    priceCtrl.text = '0';
+    _icon = 'build';
+    await _reload();
+  }
+
+  Future<void> _del(int i) async {
+    if (!pro) return;
+    await MaterialsStore.removeAt(i);
+    await _reload();
+  }
+
+  IconData _iconFor(String k) {
+    switch (k) {
+      case 'cable': return Icons.cable;
+      case 'breaker': return Icons.electrical_services;
+      case 'lamp': return Icons.lightbulb_outline;
+      case 'outlet': return Icons.power_outlined;
+      case 'switch': return Icons.toggle_on_outlined;
+      case 'pipe': return Icons.linear_scale;
+      case 'box': return Icons.crop_square;
+      default: return Icons.build;
+    }
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _field(TextEditingController c, String hint, {bool number = false}) {
+    return TextField(
+      controller: c,
+      keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(.45)),
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppTheme.border.withOpacity(.45)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editDialog(int i) async {
+    if (!pro) return;
+
+    final it = items[i];
+    final n = TextEditingController(text: it.name);
+    final u = TextEditingController(text: it.unit);
+    final pr = TextEditingController(text: it.price.toStringAsFixed(2));
+    String icon = it.icon;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.card,
+        title: const Text('Editar material', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _field(n, 'Nome'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _field(u, 'Un')),
+                const SizedBox(width: 10),
+                Expanded(child: _field(pr, 'Preço (R\$)', number: true)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: icon,
+              decoration: InputDecoration(
+                labelText: 'Ícone',
+                labelStyle: TextStyle(color: Colors.white.withOpacity(.7)),
+                filled: true,
+                fillColor: AppTheme.card,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              dropdownColor: AppTheme.card,
+              items: const [
+                DropdownMenuItem(value: 'build', child: Text('Geral')),
+                DropdownMenuItem(value: 'cable', child: Text('Cabo')),
+                DropdownMenuItem(value: 'breaker', child: Text('Disjuntor')),
+                DropdownMenuItem(value: 'lamp', child: Text('Lâmpada')),
+                DropdownMenuItem(value: 'outlet', child: Text('Tomada')),
+                DropdownMenuItem(value: 'switch', child: Text('Interruptor')),
+                DropdownMenuItem(value: 'pipe', child: Text('Conduíte')),
+                DropdownMenuItem(value: 'box', child: Text('Caixa')),
+              ],
+              onChanged: (v) => icon = v ?? 'build',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      it.name = n.text.trim();
+      it.unit = u.text.trim().isEmpty ? 'un' : u.text.trim();
+      it.price = _toDouble(pr.text);
+      it.icon = icon;
+      await MaterialsStore.save(items);
+      await _reload();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewList = items.isEmpty ? MaterialsStore.seed() : items;
+
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _bg,
+        title: const Text('Meus Materiais'),
+        actions: [
+          if (!pro)
+            TextButton(
+              onPressed: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+              child: Text('Virar PRO', style: TextStyle(color: AppTheme.gold, fontWeight: FontWeight.w900)),
+            ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (!pro)
+                  _card(
+                    child: Row(
+                      children: [
+                        Icon(Icons.lock, color: AppTheme.gold),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'FREE: você pode ver a tabela.\nPRO: cadastrar, editar e aplicar preços no orçamento.',
+                            style: TextStyle(color: Colors.white.withOpacity(.85), fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                if (pro)
+                  _card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Cadastrar material',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 10),
+                        _field(nameCtrl, 'Nome do material'),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(child: _field(unitCtrl, 'Unidade (m, un, kg...)')),
+                            const SizedBox(width: 10),
+                            Expanded(child: _field(priceCtrl, 'Preço (R\$)', number: true)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          value: _icon,
+                          decoration: InputDecoration(
+                            labelText: 'Ícone',
+                            labelStyle: TextStyle(color: Colors.white.withOpacity(.7)),
+                            filled: true,
+                            fillColor: AppTheme.card,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          dropdownColor: AppTheme.card,
+                          items: const [
+                            DropdownMenuItem(value: 'build', child: Text('Geral')),
+                            DropdownMenuItem(value: 'cable', child: Text('Cabo')),
+                            DropdownMenuItem(value: 'breaker', child: Text('Disjuntor')),
+                            DropdownMenuItem(value: 'lamp', child: Text('Lâmpada')),
+                            DropdownMenuItem(value: 'outlet', child: Text('Tomada')),
+                            DropdownMenuItem(value: 'switch', child: Text('Interruptor')),
+                            DropdownMenuItem(value: 'pipe', child: Text('Conduíte')),
+                            DropdownMenuItem(value: 'box', child: Text('Caixa')),
+                          ],
+                          onChanged: (v) => setState(() => _icon = v ?? 'build'),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _add,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.gold,
+                              foregroundColor: Colors.black,
+                            ),
+                            child: const Text('Salvar material', style: TextStyle(fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                const SizedBox(height: 6),
+                const Text('Lista',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+
+                ...viewList.asMap().entries.map((e) {
+                  final i = e.key;
+                  final it = e.value;
+
+                  return _card(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppTheme.gold.withOpacity(.12),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+                          ),
+                          child: Icon(_iconFor(it.icon), color: AppTheme.gold),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(it.name,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Un: ${it.unit} • R\$ ${it.price.toStringAsFixed(2)}',
+                                style: TextStyle(color: Colors.white.withOpacity(.7), fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (pro) ...[
+                          IconButton(
+                            onPressed: () => _editDialog(i),
+                            icon: const Icon(Icons.edit, color: Colors.white70),
+                          ),
+                          IconButton(
+                            onPressed: () => _del(i),
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                          ),
+                        ] else
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(.06),
+                              borderRadius: BorderRadius.circular(99),
+                              border: Border.all(color: Colors.white.withOpacity(.12)),
+                            ),
+                            child: Text('VER',
+                                style: TextStyle(color: Colors.white.withOpacity(.75), fontWeight: FontWeight.w900)),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+    );
+  }
+}

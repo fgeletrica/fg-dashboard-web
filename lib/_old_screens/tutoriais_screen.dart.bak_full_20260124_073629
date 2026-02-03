@@ -1,0 +1,121 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+
+class TutoriaisScreen extends StatelessWidget {
+  const TutoriaisScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Tutoriais e Dicas'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _intro(),
+          const SizedBox(height: 12),
+
+          _section(
+            title: 'Cálculo Elétrico (como usar)',
+            items: const [
+              '1) Informe Potência (W), Tensão (127/220) e Distância (m).',
+              '2) O app calcula Ib (corrente) e sugere cabo/disjuntor.',
+              '3) Se a queda de tensão estourar, ele aumenta a seção automaticamente.',
+              '4) Se você souber, preencha FP e η (útil para motores e ar-condicionado).',
+            ],
+          ),
+
+          _section(
+            title: 'O que significa cada resultado',
+            items: const [
+              'Ib: corrente do circuito.',
+              'Cabo (mm²): seção sugerida para suportar a corrente.',
+              'Iz: capacidade de condução do cabo (aprox. para referência).',
+              'Disjuntor (A): escolhido com a regra In ≥ Ib e In ≤ Iz.',
+              'Queda de tensão (%): perda aproximada até a carga.',
+            ],
+          ),
+
+          _section(
+            title: 'Equipamentos (FREE e PRO)',
+            items: const [
+              'Você pode tocar em um item para preencher Potência e Tensão automaticamente.',
+              'Itens com cadeado são PRO. Ao tocar, abre o Paywall.',
+              'BTU → W é aproximação. Se você tiver a potência real do aparelho (W), use ela.',
+            ],
+          ),
+
+          _section(
+            title: 'Orçamentos',
+            items: const [
+              'Use “Novo Orçamento” para criar rapidamente.',
+              'Você pode usar o cálculo para montar o orçamento com menos erros.',
+              'Sempre revise material, mão de obra e condições antes de enviar.',
+            ],
+          ),
+
+          _section(
+            title: 'Conta (perfil profissional + termo)',
+            items: const [
+              'Configure seu nome e empresa para aparecer no app.',
+              'Aceite o termo: o app ajuda, mas não substitui projeto/ART.',
+              'Mudou o nome? Ao voltar para o Painel, ele atualiza automaticamente.',
+            ],
+          ),
+
+          _section(
+            title: 'Dicas técnicas rápidas',
+            items: const [
+              'Chuveiro costuma ter FP≈1.0 e η≈1.0 (resistivo).',
+              'Ar-condicionado/motor pode ter FP<1.0, então a corrente sobe.',
+              'Distâncias maiores aumentam a queda de tensão → pode exigir cabo maior.',
+              'Se o disjuntor ficar maior que o “Iz” do cabo, o cabo precisa subir.',
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _intro() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: Text(
+        'Aqui tem explicação de cada tela e como fazer os cálculos.\n'
+        'Se tiver dúvida em algum resultado, volte aqui e confira o significado.',
+        style: TextStyle(color: Colors.white.withOpacity(.85), height: 1.3, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Widget _section({required String title, required List<String> items}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: ExpansionTile(
+        collapsedIconColor: Colors.white70,
+        iconColor: AppTheme.gold,
+        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        children: items
+            .map((t) => Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text('• $t', style: TextStyle(color: Colors.white.withOpacity(.80), height: 1.25)),
+                ))
+            .toList(),
+      ),
+    );
+  }
+}

@@ -1,0 +1,1438 @@
+====================================
+FG Elétrica — Dump para suporte
+Data: sáb 31 jan 2026 07:06:42 -03
+Pasta: /home/felype/apps/meu_ajudante_fg
+====================================
+
+== (1) ÁRVORE INDUSTRIAL (pastas/arquivos) ==
+total 24
+drwxrwxr-x 6 felype felype 4096 jan 31 06:39 .
+drwxrwxr-x 8 felype felype 4096 jan 28 08:05 ..
+drwxrwxr-x 2 felype felype 4096 jan 31 06:39 export
+drwxrwxr-x 2 felype felype 4096 jan 26 03:35 models
+drwxrwxr-x 2 felype felype 4096 jan 31 06:49 screens
+drwxrwxr-x 2 felype felype 4096 jan 31 06:39 services
+
+total 144
+drwxrwxr-x 2 felype felype  4096 jan 31 06:49 .
+drwxrwxr-x 6 felype felype  4096 jan 31 06:39 ..
+-rw-rw-r-- 1 felype felype  9086 jan 30 17:09 checklists_screen.dart
+-rw-rw-r-- 1 felype felype  5234 jan 30 17:09 diagnosis_screen.dart
+-rw-rw-r-- 1 felype felype 12600 jan 30 23:19 industrial_dashboard_screen.dart
+-rw-rw-r-- 1 felype felype  3590 jan 31 06:51 industrial_entry_screen.dart
+-rw-rw-r-- 1 felype felype  7749 jan 30 17:09 knowledge_base_screen.dart
+-rw-rw-r-- 1 felype felype  4823 jan 30 17:09 line_stop_detail_screen.dart
+-rw-rw-r-- 1 felype felype  9736 jan 30 17:09 line_stop_history_screen.dart
+-rw-rw-r-- 1 felype felype  8688 jan 30 17:09 line_stop_screen.dart
+-rw-rw-r-- 1 felype felype  8581 jan 30 17:09 shift_close_screen.dart
+-rw-rw-r-- 1 felype felype 10644 jan 30 17:09 shift_summary_screen.dart
+-rw-rw-r-- 1 felype felype  4951 jan 31 06:42 supervisor_audit_screen.dart
+-rw-rw-r-- 1 felype felype  8539 jan 30 17:09 supervisor_collect_screen.dart
+-rw-rw-r-- 1 felype felype 10674 jan 31 06:42 supervisor_users_screen.dart
+
+total 56
+drwxrwxr-x 2 felype felype 4096 jan 31 06:39 .
+drwxrwxr-x 6 felype felype 4096 jan 31 06:39 ..
+-rw-rw-r-- 1 felype felype 2615 jan 31 06:42 industrial_catalog_l2.dart
+-rw-rw-r-- 1 felype felype 3697 jan 30 17:09 industrial_export.dart
+-rw-rw-r-- 1 felype felype 8262 jan 30 23:15 industrial_store.dart
+-rw-rw-r-- 1 felype felype 2941 jan 26 02:42 industrial_store.dart.bak_20260126_024207
+-rw-rw-r-- 1 felype felype 7496 jan 26 02:48 industrial_store.dart.bak_20260126_024837
+-rw-rw-r-- 1 felype felype 7496 jan 26 02:48 industrial_store.dart.bak_fix_20260126_024855
+-rw-rw-r-- 1 felype felype 1246 jan 31 06:42 industrial_supervisor_service.dart
+-rw-rw-r-- 1 felype felype 1945 jan 30 23:15 shift_store.dart
+
+total 8
+drwxrwxr-x 2 felype felype 4096 jan 31 06:39 .
+drwxrwxr-x 6 felype felype 4096 jan 31 06:39 ..
+
+== (2) ROTAS (AppRoutes/AppPages) ==
+
+------------------------------------
+FILE: lib/routes/app_routes.dart
+------------------------------------
+import '../screens/materials_screen.dart';
+
+class AppRoutes {
+  static const industrial = '/industrial';
+  static const validateDoc = '/validate_doc';
+
+  static const entry = '/entry';
+  static const String admin = '/admin';
+
+  static const materiais = '/materiais';
+
+  static const String home = '/'; // agora vai ser o Gate (primeiro acesso)
+  static const String homeMain = '/home'; // Home real
+
+  static const String calc = '/calculo';
+  static const String calculo = '/calculo'; // alias
+
+  static const String agenda = '/agenda';
+  static const String orcamentos = '/orcamentos';
+  static const String ferramentas = '/ferramentas';
+  static const String tutoriais = '/tutoriais';
+  static const String conta = '/conta';
+  static const String paywall = '/paywall';
+
+  static const String servicos = '/servicos';
+  static const String servicePicker = '/service_picker';
+  static const String equipamentos = '/equipamentos';
+
+  static const String unitConvert = '/unit_convert';
+  static const String cabosTabela = '/cabos_tabela';
+  static const String quedaTensao = '/queda_tensao';
+  static const String laudo = '/laudo';
+  static const String clientes = '/clientes';
+  static const String deslocamento = '/deslocamento';
+
+  // extras
+  static const String parceiros = '/parceiros';
+  static const String marketplace = '/marketplace';
+  static const String comunidade = '/comunidade';
+  static const String sobre = '/sobre';
+  static const drTest = '/dr-test';
+
+  static const String authGate = '/auth';
+
+  static const String login = '/login';
+
+  static const String register = '/register';
+
+  static const String homeClient = '/home_client';
+
+  static const String homePro = '/home_pro';
+}
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+------------------------------------
+FILE: lib/routes/app_pages.dart
+------------------------------------
+import 'package:meu_ajudante_fg/routes/app_routes.dart';
+import 'package:meu_ajudante_fg/features/industrial/screens/industrial_entry_screen.dart';
+import 'package:meu_ajudante_fg/screens/validate_document_screen.dart';
+import '../screens/services_market_screen.dart';
+import 'package:flutter/material.dart';
+
+import 'app_routes.dart';
+
+// Screens
+import '../screens/home_screen.dart';
+import '../screens/calc_screen.dart';
+import '../screens/agenda_screen.dart';
+import '../screens/orcamentos_screen.dart';
+import '../screens/ferramentas_screen.dart';
+import '../screens/tutoriais_screen.dart';
+import '../screens/account_screen.dart';
+import '../screens/paywall_screen.dart';
+import '../screens/equipamentos_screen.dart';
+import '../screens/clients_screen.dart';
+import '../screens/unit_convert_screen.dart';
+import '../screens/cable_table_screen.dart';
+import '../screens/voltage_drop_screen.dart';
+import '../screens/travel_cost_screen.dart';
+import '../screens/service_picker_screen.dart';
+import '../screens/materials_screen.dart';
+
+// Novas telas (se existirem no seu projeto)
+import '../screens/about_screen.dart';
+import '../screens/parceiros_screen.dart';
+import '../screens/centro_pro_screen.dart';
+
+// Admin
+import '../features/admin/admin_screen.dart';
+import '../screens/gate_screen.dart';
+
+import '../screens/app_entry.dart';
+import '../screens/auth/auth_gate_screen.dart';
+import '../screens/auth/login_screen.dart';
+import '../screens/auth/register_screen.dart';
+import '../screens/home_client_screen.dart';
+import '../screens/home_pro_screen.dart';
+import '../screens/community_screen.dart';
+
+class AppPages {
+  static Map<String, WidgetBuilder> get routes => {
+        AppRoutes.industrial: (_) => const IndustrialEntryScreen(),
+        AppRoutes.validateDoc: (_) => const ValidateDocumentScreen(),
+
+        AppRoutes.homePro: (_) => const HomeProScreen(),
+        AppRoutes.homeClient: (_) => const HomeClientScreen(),
+        AppRoutes.register: (_) => const RegisterScreen(),
+        AppRoutes.authGate: (_) => const AuthGateScreen(),
+        AppRoutes.login: (_) => const LoginScreen(),
+        AppRoutes.entry: (_) => const AppEntry(),
+        AppRoutes.homeMain: (_) => const HomeScreen(),
+        AppRoutes.home: (_) => const GateScreen(),
+        AppRoutes.calc: (_) => const CalcScreen(),
+        AppRoutes.materiais: (_) => MaterialsScreen(),
+        AppRoutes.agenda: (_) => const AgendaScreen(),
+        AppRoutes.orcamentos: (_) => OrcamentosScreen(),
+        AppRoutes.ferramentas: (_) => const FerramentasScreen(),
+        AppRoutes.tutoriais: (_) => const TutoriaisScreen(),
+
+        // ✅ Aqui é o ponto principal:
+        // força /conta abrir a tela profissional
+        AppRoutes.conta: (_) => AccountScreen(),
+
+        AppRoutes.paywall: (_) => PaywallScreen(),
+        AppRoutes.equipamentos: (_) => const EquipamentosScreen(),
+        AppRoutes.clientes: (_) => const ClientsScreen(),
+        AppRoutes.unitConvert: (_) => const UnitConvertScreen(),
+        AppRoutes.cabosTabela: (_) => const CableTableScreen(),
+        AppRoutes.quedaTensao: (_) => const VoltageDropScreen(),
+        AppRoutes.deslocamento: (_) => const TravelCostScreen(),
+        AppRoutes.parceiros: (_) => const ParceirosScreen(),
+        AppRoutes.servicePicker: (_) => const ServicePickerScreen(),
+        AppRoutes.marketplace: (_) => const ServicesMarketScreen(),
+        AppRoutes.comunidade: (_) => const CommunityScreen(),
+
+        // Extras (se você chamou por pushNamed em algum lugar)
+        '/sobre': (_) => const AboutScreen(),
+        '/centro_pro': (_) => const CentroProScreen(),
+        AppRoutes.admin: (_) => const AdminScreen(),
+      };
+}
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+== (3) TELA INDUSTRIAL PRINCIPAL (o que está abrindo no Modo Industrial) ==
+
+------------------------------------
+FILE: lib/features/industrial/screens/industrial_dashboard_screen.dart
+------------------------------------
+import 'package:flutter/material.dart';
+import 'package:meu_ajudante_fg/features/industrial/models/shift_summary.dart';
+import '../../../core/app_theme.dart';
+import '../models/industrial_models.dart';
+
+import '../services/industrial_store.dart';
+
+class IndustrialDashboardScreen extends StatefulWidget {
+  const IndustrialDashboardScreen({super.key});
+
+  @override
+  State<IndustrialDashboardScreen> createState() =>
+      _IndustrialDashboardScreenState();
+}
+
+class _IndustrialDashboardScreenState extends State<IndustrialDashboardScreen> {
+  DateTimeRange? _range;
+  String _shift = 'ALL';
+
+  Future<DateTimeRange?> _pickRange() async {
+    final now = DateTime.now();
+    final initial = _range ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month, now.day, 0, 0),
+          end: now,
+        );
+    return showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: initial,
+    );
+  }
+
+  DateTimeRange _effectiveRange() {
+    final now = DateTime.now();
+    return _range ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month, now.day, 0, 0),
+          end: now,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rr = _effectiveRange();
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: const Text('Supervisor • Dashboard'),
+        actions: [
+          IconButton(
+            tooltip: 'Período',
+            onPressed: () async {
+              final picked = await _pickRange();
+              if (!mounted) {
+                return;
+              }
+              setState(() => _range = picked);
+            },
+            icon: const Icon(Icons.date_range),
+          ),
+        ],
+      ),
+      body: FutureBuilder<List<LineStopReport>>(
+        future: IndustrialStore.listLineStops(limit: 2000),
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final all = snap.data ?? const <LineStopReport>[];
+          final filtered = IndustrialStore.filterLineStops(
+            all,
+            start: rr.start,
+            end: rr.end,
+            shift: _shift,
+            query: '',
+          );
+
+          final totalStops = filtered.length;
+          final totalDown = IndustrialStore.sumDowntime(filtered);
+
+          final byMachineDown = IndustrialStore.downtimeByMachine(filtered);
+          final byCauseCount = IndustrialStore.countByCause(filtered);
+
+          final topMachine = IndustrialStore.topKey(byMachineDown);
+          final topCause = IndustrialStore.topKey(byCauseCount);
+
+          final topMachines = IndustrialStore.topN(byMachineDown, n: 5);
+          final topCauses = IndustrialStore.topN(byCauseCount, n: 5);
+
+          final heat = IndustrialStore.downtimeHeatByHour(filtered);
+          final maxHeat =
+              heat.isEmpty ? 1 : (heat.reduce((a, b) => a > b ? a : b));
+          final rangeLabel =
+              '${rr.start.toString().substring(0, 10)} → ${rr.end.toString().substring(0, 10)}';
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _filters(rangeLabel),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _kpi('Paradas', '$totalStops')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _kpi('Downtime', '${totalDown}min')),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                      child: _kpi('Top máquina',
+                          topMachine.isEmpty ? '—' : topMachine)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child:
+                          _kpi('Top causa', topCause.isEmpty ? '—' : topCause)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _sectionTitle('Heatmap • Downtime por hora'),
+              const SizedBox(height: 10),
+              _heatmap(heat, maxHeat),
+              const SizedBox(height: 16),
+              _sectionTitle('Ranking • Máquinas (downtime)'),
+              const SizedBox(height: 10),
+              ...topMachines.map((e) =>
+                  _rankRow(e.key.isEmpty ? '—' : e.key, '${e.value}min')),
+              const SizedBox(height: 16),
+              _sectionTitle('Ranking • Causas (quantidade)'),
+              const SizedBox(height: 10),
+              ...topCauses.map(
+                  (e) => _rankRow(e.key.isEmpty ? '—' : e.key, '${e.value}x')),
+              const SizedBox(height: 16),
+              _sectionTitle('Fechamentos salvos (Turnos)'),
+              const SizedBox(height: 10),
+              FutureBuilder<List<ShiftCloseSummary>>(
+                future: IndustrialStore.listShiftSummaries(limit: 12),
+                builder: (context, s2) {
+                  if (!s2.hasData)
+                    return const Center(
+                        child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator()));
+                  final list = s2.data ?? const <ShiftCloseSummary>[];
+                  if (list.isEmpty) {
+                    return Text(
+                      'Ainda não fechou nenhum turno.',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: .7),
+                          fontWeight: FontWeight.w700),
+                    );
+                  }
+                  return Column(
+                    children: list.map((s) {
+                      final dt = DateTime.fromMillisecondsSinceEpoch((s.ts))
+                          .toString()
+                          .substring(0, 16);
+                      return _card(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Turno ${(s.shift)} • $dt',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'Paradas: ${(s.totalStops)} • Downtime: ${(s.downtimeMin)}min',
+                                      style: TextStyle(
+                                          color: Colors.white
+                                              .withValues(alpha: .7),
+                                          fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'Top máquina: ${(s.topMachine).isEmpty ? '—' : (s.topMachine)} • Top causa: ${(s.topCause).isEmpty ? '—' : (s.topCause)}',
+                                      style: TextStyle(
+                                          color: Colors.white
+                                              .withValues(alpha: .65),
+                                          fontWeight: FontWeight.w700),
+                                    ),
+                                  ]),
+                            ),
+                            Icon(Icons.chevron_right,
+                                color: Colors.white.withValues(alpha: .6)),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _filters(String rangeLabel) {
+    return _card(
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Período: $rangeLabel',
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: .85),
+                  fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(width: 10),
+          DropdownButton<String>(
+            value: _shift,
+            dropdownColor: AppTheme.card,
+            items: const [
+              DropdownMenuItem(value: 'ALL', child: Text('Todos')),
+              DropdownMenuItem(value: 'A', child: Text('Turno A')),
+              DropdownMenuItem(value: 'B', child: Text('Turno B')),
+              DropdownMenuItem(value: 'C', child: Text('Turno C')),
+              DropdownMenuItem(value: 'D', child: Text('Turno D')),
+            ],
+            onChanged: (v) => setState(() => _shift = v ?? 'ALL'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kpi(String title, String value) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: .7),
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+          ),
+        ],
+      ),
+    );
+
+---- (continua) ----
+  }
+
+  Widget _sectionTitle(String s) {
+    return Text(s,
+        style: TextStyle(
+            color: Colors.white.withValues(alpha: .9),
+            fontWeight: FontWeight.w900));
+  }
+
+  Widget _rankRow(String left, String right) {
+    return _card(
+      child: Row(
+        children: [
+          Expanded(
+              child: Text(left,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w900))),
+          Text(right,
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: .75),
+                  fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
+  Widget _heatmap(List<int> heat, int maxHeat) {
+    // 24 horas
+    final data = (heat.length == 24) ? heat : List<int>.filled(24, 0);
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('0h → 23h',
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: .7),
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: List.generate(24, (i) {
+              final v = data[i];
+              final ratio = maxHeat <= 0 ? 0.0 : (v / maxHeat).clamp(0.0, 1.0);
+              final bg = Color.lerp(AppTheme.card,
+                      AppTheme.gold.withValues(alpha: .85), ratio) ??
+                  AppTheme.card;
+
+              return Container(
+                width: 44,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(10),
+                  border:
+                      Border.all(color: AppTheme.border.withValues(alpha: .35)),
+                ),
+                child: Text(
+                  '$i',
+                  style: TextStyle(
+                      color: Colors.white.withValues(alpha: .9),
+                      fontWeight: FontWeight.w900),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Mais “quente” = mais downtime.',
+            style: TextStyle(
+                color: Colors.white.withValues(alpha: .6),
+                fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withValues(alpha: .35)),
+      ),
+      child: child,
+    );
+  }
+}
+
+---- (fim do recorte) ----
+
+------------------------------------
+FILE: lib/features/industrial/screens/industrial_entry_screen.dart
+------------------------------------
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:meu_ajudante_fg/core/app_theme.dart';
+import 'package:meu_ajudante_fg/routes/app_routes.dart';
+import 'industrial_dashboard_screen.dart';
+
+class IndustrialEntryScreen extends StatefulWidget {
+  const IndustrialEntryScreen({super.key});
+
+  @override
+  State<IndustrialEntryScreen> createState() => _IndustrialEntryScreenState();
+}
+
+class _IndustrialEntryScreenState extends State<IndustrialEntryScreen> {
+  StreamSubscription<AuthState>? _sub;
+
+  Session? get _session => Supabase.instance.client.auth.currentSession;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // LOGADO → DASHBOARD INDUSTRIAL
+    if (_session != null) {
+      return IndustrialDashboardScreen();
+    }
+
+    // NÃO LOGADO → TELA DE ACESSO
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+        title: const Text('Industrial'),
+      ),
+      body: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.card,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppTheme.border.withOpacity(.35)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Acesso restrito',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(.95),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Faça login para acessar o módulo industrial.',
+                  style: TextStyle(color: Colors.white.withOpacity(.75)),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            Navigator.of(context).pushNamed(AppRoutes.login),
+                        child: const Text('Entrar'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () =>
+                            Navigator.of(context).pushNamed(AppRoutes.register),
+                        child: const Text('Criar conta'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Após criar a conta, aguarde alguns segundos e volte.',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(.55),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+== (4) TELAS NOVAS QUE CRIAMOS (se existirem) ==
+
+------------------------------------
+FILE: lib/features/industrial/screens/new_diagnostic_screen.dart
+------------------------------------
+NÃO EXISTE: lib/features/industrial/screens/new_diagnostic_screen.dart
+
+------------------------------------
+FILE: lib/features/industrial/screens/history_export_screen.dart
+------------------------------------
+NÃO EXISTE: lib/features/industrial/screens/history_export_screen.dart
+
+------------------------------------
+FILE: lib/features/industrial/screens/supervisor_export_screen.dart
+------------------------------------
+NÃO EXISTE: lib/features/industrial/screens/supervisor_export_screen.dart
+
+------------------------------------
+FILE: lib/features/industrial/screens/supervisor_users_screen.dart
+------------------------------------
+import 'package:flutter/material.dart';
+import 'package:meu_ajudante_fg/core/app_theme.dart';
+import '../services/industrial_context.dart';
+import '../services/industrial_supervisor_service.dart';
+
+class SupervisorUsersScreen extends StatefulWidget {
+  const SupervisorUsersScreen({super.key});
+
+  @override
+  State<SupervisorUsersScreen> createState() => _SupervisorUsersScreenState();
+}
+
+class _SupervisorUsersScreenState extends State<SupervisorUsersScreen> {
+  IndustrialContext? ctx;
+  bool loading = true;
+
+  List<Map<String, dynamic>> users = [];
+  String q = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    final c = await IndustrialContextService.loadMyContext();
+    if (!mounted) return;
+    setState(() => ctx = c);
+    await reload();
+  }
+
+  Future<void> reload() async {
+    if (ctx == null || !ctx!.isSupervisor) {
+      setState(() => loading = false);
+      return;
+    }
+    setState(() => loading = true);
+    try {
+      final list = await IndustrialSupervisorService.listUsers();
+      if (!mounted) return;
+      setState(() {
+        users = list;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao listar usuários: $e')),
+      );
+    }
+  }
+
+  List<Map<String, dynamic>> get filtered {
+    final s = q.trim().toLowerCase();
+    if (s.isEmpty) return users;
+    return users.where((u) {
+      final name = (u['display_name'] ?? '').toString().toLowerCase();
+      final email = (u['email'] ?? '').toString().toLowerCase();
+      final role = (u['role'] ?? '').toString().toLowerCase();
+      return name.contains(s) || email.contains(s) || role.contains(s);
+    }).toList();
+  }
+
+  Future<void> _promote(Map<String, dynamic> u) async {
+    final id = (u['user_id'] ?? '').toString();
+    final currentRole = (u['role'] ?? 'operator').toString();
+    final displayName = (u['display_name'] ?? '').toString();
+
+    String selected = currentRole;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: AppTheme.card,
+          title: const Text('Alterar role',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _roleRadio('operator', selected, (v) => selected = v),
+              _roleRadio('technician', selected, (v) => selected = v),
+              _roleRadio('supervisor', selected, (v) => selected = v),
+              _roleRadio('admin', selected, (v) => selected = v),
+              const SizedBox(height: 10),
+              Text(
+                'Usuário: $displayName',
+                style: TextStyle(color: Colors.white.withOpacity(.8)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.gold,
+                  foregroundColor: Colors.black),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Salvar',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    try {
+      await IndustrialSupervisorService.setRoleChecked(
+        targetUserId: id,
+        newRole: selected,
+        displayName: displayName,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Role atualizado ✅')));
+      await reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Falha ao atualizar role: $e')));
+    }
+  }
+
+  Widget _roleRadio(String v, String group, ValueChanged<String> onChange) {
+    return RadioListTile<String>(
+      value: v,
+      groupValue: group,
+      onChanged: (x) => onChange((x ?? group).toString()),
+      title: Text(v, style: const TextStyle(fontWeight: FontWeight.w800)),
+      activeColor: AppTheme.gold,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ctx;
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+        title: const Text('Supervisor • Usuários (DQX)'),
+        actions: [
+          IconButton(onPressed: reload, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: (c == null)
+          ? const Center(child: CircularProgressIndicator())
+          : (!c.isSupervisor)
+              ? Center(
+                  child: Text(
+                    'Sem permissão de supervisor/admin.',
+                    style: TextStyle(color: Colors.white.withOpacity(.8)),
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.card,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                              color: AppTheme.border.withOpacity(.35)),
+                        ),
+                        child: TextField(
+                          onChanged: (v) => setState(() => q = v),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar por nome, email ou role...',
+                            filled: true,
+                            fillColor: AppTheme.bg.withOpacity(.35),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: loading
+                            ? const Center(child: CircularProgressIndicator())
+                            : ListView.builder(
+                                itemCount: filtered.length,
+                                itemBuilder: (_, i) {
+                                  final u = filtered[i];
+                                  final name =
+                                      (u['display_name'] ?? '').toString();
+                                  final email = (u['email'] ?? '').toString();
+                                  final role = (u['role'] ?? '').toString();
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.card,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                          color:
+                                              AppTheme.border.withOpacity(.35)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.person,
+                                            color: Colors.white),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(name.isEmpty ? '—' : name,
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w900)),
+                                              const SizedBox(height: 2),
+                                              Text(email.isEmpty ? '—' : email,
+                                                  style: TextStyle(
+                                                      color: Colors.white
+                                                          .withOpacity(.7),
+                                                      fontSize: 12)),
+                                              const SizedBox(height: 4),
+                                              Text('Role: $role',
+                                                  style: TextStyle(
+                                                      color: Colors.white
+                                                          .withOpacity(.85))),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppTheme.gold,
+                                            foregroundColor: Colors.black,
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(14)),
+                                          ),
+                                          onPressed: () => _promote(u),
+                                          child: const Text('Editar',
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w900)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+
+---- (continua) ----
+    );
+  }
+}
+
+---- (fim do recorte) ----
+
+------------------------------------
+FILE: lib/features/industrial/screens/supervisor_audit_screen.dart
+------------------------------------
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:meu_ajudante_fg/core/app_theme.dart';
+import '../services/industrial_context.dart';
+import '../services/industrial_supervisor_service.dart';
+
+class SupervisorAuditScreen extends StatefulWidget {
+  const SupervisorAuditScreen({super.key});
+
+  @override
+  State<SupervisorAuditScreen> createState() => _SupervisorAuditScreenState();
+}
+
+class _SupervisorAuditScreenState extends State<SupervisorAuditScreen> {
+  IndustrialContext? ctx;
+  bool loading = true;
+  List<Map<String, dynamic>> items = [];
+
+  final fmt = DateFormat('dd/MM/yyyy HH:mm');
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    final c = await IndustrialContextService.loadMyContext();
+    if (!mounted) return;
+    setState(() => ctx = c);
+    await reload();
+  }
+
+  Future<void> reload() async {
+    final c = ctx;
+    if (c == null || !c.isSupervisor) {
+      setState(() => loading = false);
+      return;
+    }
+
+    setState(() => loading = true);
+    try {
+      final list = await IndustrialSupervisorService.listAudit(
+          siteId: c.siteId, limit: 250);
+      if (!mounted) return;
+      setState(() {
+        items = list;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro auditoria: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ctx;
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        elevation: 0,
+        title: const Text('Supervisor • Auditoria (DQX)'),
+        actions: [
+          IconButton(onPressed: reload, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: (c == null)
+          ? const Center(child: CircularProgressIndicator())
+          : (!c.isSupervisor)
+              ? Center(
+                  child: Text(
+                    'Sem permissão de supervisor/admin.',
+                    style: TextStyle(color: Colors.white.withOpacity(.8)),
+                  ),
+                )
+              : loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      itemBuilder: (_, i) {
+                        final a = items[i];
+                        final action = (a['action'] ?? '').toString();
+                        final tableName = (a['table_name'] ?? '').toString();
+                        final actor = (a['actor_name'] ?? '').toString();
+                        final created = (a['created_at'] ?? '').toString();
+                        final target = (a['target_id'] ?? '').toString();
+
+                        String when = created;
+                        try {
+                          when = fmt.format(DateTime.parse(created).toLocal());
+                        } catch (_) {}
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppTheme.card,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                                color: AppTheme.border.withOpacity(.35)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('$action • $tableName',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 6),
+                              Text('Por: $actor',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(.85))),
+                              const SizedBox(height: 4),
+                              Text('Quando: $when',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(.7),
+                                      fontSize: 12)),
+                              const SizedBox(height: 4),
+                              Text('Target: ${target.isEmpty ? '—' : target}',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(.7),
+                                      fontSize: 12)),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+    );
+  }
+}
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+== (5) SERVICES (context/store/catalog/supervisor) ==
+
+------------------------------------
+FILE: lib/features/industrial/services/industrial_context.dart
+------------------------------------
+NÃO EXISTE: lib/features/industrial/services/industrial_context.dart
+
+------------------------------------
+FILE: lib/features/industrial/services/industrial_diagnostics_store.dart
+------------------------------------
+NÃO EXISTE: lib/features/industrial/services/industrial_diagnostics_store.dart
+
+------------------------------------
+FILE: lib/features/industrial/services/industrial_catalog_l2.dart
+------------------------------------
+class IndustrialCatalogL2 {
+  static const orgName = 'Coca Cola Andina';
+  static const siteName = 'DQX';
+
+  static const lines = <String>['Linha 2'];
+
+  static const Map<String, List<String>> machineGroups = {
+    'PALETEIRAS': [
+      'Transporte de Pallets - Linha 2',
+      'Despaletização - Linha 2',
+      'Despaletizadora - Robogrip',
+      "Despaletizadora de Bulk's de Grf's",
+      'Paletização - Linha 2',
+      'Transporte de Caixas - Linha 2',
+      "Desencaixamento de Grf's - Linha 2",
+      'Desencaixotadora - Knickarm Roboter',
+      'Lavagem de Caixas - Linha 2',
+      'Encaixotamento - Linha 2',
+    ],
+    'ENVASE / ENCHEDORA L2': [
+      'Enchedora Modulfill - L2',
+      'Selecionador de tampas - L2',
+      'Painel elétrico - Enchedora L2 - KI31A71',
+      'Instrumentos Enchedora L2',
+      'Cavitus - Enchedora L2',
+      'Secador de ar comprimido - Enchedora L2',
+      'Bateria de filtros entrada CO2',
+      'Bateria de filtros entrada AR / N2',
+      'Central de espuma Diversey',
+    ],
+    'CAPSULADOR / DESCAPSULADOR': [
+      'Capsulador - KI31A71',
+      'Descapsulador - Rotomat',
+      'Elevador de Tampas - Linha 2',
+    ],
+    'PASTEURIZAÇÃO / UTILIDADES': [
+      'Pasteurização - Linha 2',
+      'Warmer - Linatherm (AQL0002)',
+      'Trocador de calor - Linha 2',
+      'Climatizadores e Insufladores - Linha 2',
+      'Sistema Multistage - Linha 02',
+      'Carbonatação - Linha 2',
+    ],
+    'ROTULAGEM / CODIFICAÇÃO': [
+      'Rotulagem - Linha 2',
+      'Codificação - Linha 2',
+      'Envolvedora - Linha 2',
+      'Etiquetagem - Linha 2',
+    ],
+    'INSPEÇÕES ELETRÔNICAS': [
+      'Inspeções Eletrônicas - Linha 2',
+    ],
+    'TRANSPORTE DE GARRAFAS': [
+      'Transporte de Garrafas - Linha 2',
+    ],
+    'LAVAGEM / RINSAGEM': [
+      'Lavagem de Garrafas - Linha 2',
+      'Lavadora de Garrafas (Linha 2)',
+      'Rinsagem - Linha 2',
+      'Rinser de Garrafas Usadas',
+      'Rinser de Garrafas Novas',
+      'Instrumentos Rinser L2',
+    ],
+    'DETECTOR DE MATÉRIA': [
+      'Detector de matéria - Linha 2',
+      'Aircontronic 772 - Detector de Matéria',
+      'Insp. Módulo SAM (Combustíveis/Naftalina)',
+      'Misturador de carbonato de sódio',
+    ],
+    'DISTRIBUIÇÃO / PAINÉIS': [
+      'Painel Elétrico de Distribuição - Linha 2',
+    ],
+  };
+
+  static List<String> groupNames() => machineGroups.keys.toList()..sort();
+
+  static List<String> itemsForGroup(String group) {
+    final items = machineGroups[group] ?? const <String>[];
+    final list = List<String>.from(items);
+    list.sort();
+    return list;
+  }
+}
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+------------------------------------
+FILE: lib/features/industrial/services/industrial_supervisor_service.dart
+------------------------------------
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class IndustrialSupervisorService {
+  static Future<List<Map<String, dynamic>>> listUsers() async {
+    final client = Supabase.instance.client;
+    final res = await client.rpc('supervisor_list_users');
+    if (res is! List) return <Map<String, dynamic>>[];
+    return res.map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
+  static Future<void> setRoleChecked({
+    required String targetUserId,
+    required String newRole,
+    required String displayName,
+  }) async {
+    final client = Supabase.instance.client;
+    await client.rpc('industrial_set_role_checked', params: {
+      '_target_user': targetUserId,
+      '_new_role': newRole,
+      '_display_name': displayName,
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> listAudit({
+    required String siteId,
+    int limit = 200,
+  }) async {
+    final client = Supabase.instance.client;
+
+    final res = await client
+        .from('industrial_audit_log')
+        .select()
+        .eq('site_id', siteId)
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    if (res is! List) return <Map<String, dynamic>>[];
+    return res.map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+}
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+== (6) main/pubspec (pra ver deps e entry) ==
+
+------------------------------------
+FILE: lib/main.dart
+------------------------------------
+import 'routes/app_routes.dart';
+import 'features/tests/dr_test_screen.dart';
+import 'screens/mode_select_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'screens/app_entry.dart';
+import 'routes/app_pages.dart';
+import 'config/supabase_config.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('pt_BR', null);
+
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+  );
+
+  runApp(const MeuAjudanteApp());
+}
+
+class MeuAjudanteApp extends StatelessWidget {
+  const MeuAjudanteApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      routes: AppPages.routes,
+      debugShowCheckedModeBanner: false,
+      title: 'FG Elétrica',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0E141E),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0E141E),
+          foregroundColor: Colors.white,
+        ),
+      ),
+      initialRoute: AppRoutes.authGate,
+    );
+  }
+}
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+------------------------------------
+FILE: pubspec.yaml
+------------------------------------
+name: meu_ajudante_fg
+description: Meu Ajudante (FG Elétrica) - offline first
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  crypto: ^3.0.3
+
+  barcode: ^2.2.4
+
+  image_picker: ^1.2.1
+  file_selector: ^1.0.3
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  shared_preferences: ^2.5.4
+  intl: ^0.20.2
+  pdf: ^3.11.3
+  printing: ^5.14.2
+  share_plus: ^12.0.1
+  path_provider: ^2.1.5
+  signature: ^6.3.0
+  url_launcher: ^6.3.2
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.7
+  open_filex: ^4.7.0
+  supabase_flutter: ^2.12.0
+  uuid: ^4.5.2
+  csv: ^6.0.0
+  collection: ^1.19.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/logo.png
+    - assets/images/
+
+flutter_launcher_icons:
+  android: true
+  linux: true
+
+  windows:
+    generate: true
+    image_path: "assets/icon.png"
+
+
+  image_path: "assets/icon.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/icon.png"
+
+
+---- (continua) ----
+
+---- (fim do recorte) ----
+
+== (7) grep rápido: IndustrialEntryScreen / AppRoutes.industrial ==
+
+== (8) flutter doctor -v (recorte) ==
+[✓] Flutter (Channel stable, 3.38.7, on Ubuntu 24.04.3 LTS 6.14.0-37-generic, locale pt_BR.UTF-8) [48ms]
+    • Flutter version 3.38.7 on channel stable at /home/felype/flutter
+    • Upstream repository https://github.com/flutter/flutter.git
+    • Framework revision 3b62efc2a3 (3 weeks ago), 2026-01-13 13:47:42 -0800
+    • Engine revision 78fc3012e4
+    • Dart version 3.10.7
+    • DevTools version 2.51.1
+    • Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop, enable-windows-desktop, enable-android, enable-ios, cli-animations, enable-native-assets, omit-legacy-version-file, enable-lldb-debugging
+
+[✓] Android toolchain - develop for Android devices (Android SDK version 36.1.0) [2,4s]
+    • Android SDK at /home/felype/Android/Sdk
+    • Emulator version 36.3.10.0 (build_id 14472402) (CL:N/A)
+    • Platform android-36, build-tools 36.1.0
+    • ANDROID_HOME = /home/felype/Android/Sdk
+    • ANDROID_SDK_ROOT = /home/felype/Android/Sdk
+    • Java binary at: /snap/android-studio/209/jbr/bin/java
+      This is the JDK bundled with the latest Android Studio installation on this machine.
+      To manually set the JDK path, use: `flutter config --jdk-dir="path/to/jdk"`.
+    • Java version OpenJDK Runtime Environment (build 21.0.7+-13880790-b1038.58)
+    • All Android licenses accepted.
+
+[✗] Chrome - develop for the web (Cannot find Chrome executable at google-chrome) [8ms]
+    ! Cannot find Chrome. Try setting CHROME_EXECUTABLE to a Chrome executable.
+
+[✓] Linux toolchain - develop for Linux desktop [112ms]
+    • Ubuntu clang version 18.1.3 (1ubuntu1)
+    • cmake version 3.28.3
+    • ninja version 1.11.1
+    • pkg-config version 1.8.1
+    ! Unable to access driver information using 'eglinfo'.
+      It is likely available from your distribution (e.g.: apt install mesa-utils)
+
+[✓] Connected device (1 available) [75ms]
+    • Linux (desktop) • linux • linux-x64 • Ubuntu 24.04.3 LTS 6.14.0-37-generic
+
+[✓] Network resources [700ms]
+    • All expected network resources are available.
+
+! Doctor found issues in 1 category.
+
+====================================
+✅ PRONTO. Agora me manda o conteúdo do arquivo:
+   FG_DIAGNOSTICO_20260131_070642.txt
+====================================

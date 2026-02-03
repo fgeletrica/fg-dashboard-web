@@ -1,0 +1,57 @@
+import 'package:flutter/material.dart';
+
+import 'app_routes.dart';
+
+// Screens
+import '../screens/home_screen.dart';
+import '../screens/calc_screen.dart';
+import '../screens/agenda_screen.dart';
+import '../screens/orcamentos_screen.dart';
+import '../screens/ferramentas_screen.dart';
+import '../screens/tutoriais_screen.dart';
+import '../screens/account_screen.dart';
+import '../screens/conta_screen.dart';
+import '../screens/paywall_screen.dart';
+import '../screens/equipamentos_screen.dart';
+import '../screens/clients_screen.dart';
+import '../screens/unit_convert_screen.dart';
+import '../screens/cable_table_screen.dart';
+import '../screens/voltage_drop_screen.dart';
+import '../screens/travel_cost_screen.dart';
+
+// Novas telas (se existirem no seu projeto)
+import '../screens/about_screen.dart';
+import '../screens/parceiros_screen.dart';
+import '../screens/centro_pro_screen.dart';
+
+// Admin
+import '../features/admin/admin_screen.dart';
+
+class AppPages {
+  static Map<String, WidgetBuilder> get routes => {
+        AppRoutes.home: (_) => const HomeScreen(),
+        AppRoutes.calc: (_) => const CalcScreen(),
+        AppRoutes.agenda: (_) => const AgendaScreen(),
+        AppRoutes.orcamentos: (_) => const OrcamentosScreen(),
+        AppRoutes.ferramentas: (_) => const FerramentasScreen(),
+        AppRoutes.tutoriais: (_) => const TutoriaisScreen(),
+
+        // ✅ Aqui é o ponto principal:
+        // força /conta abrir a tela profissional
+        AppRoutes.conta: (_) => const AccountScreen(),
+
+        AppRoutes.paywall: (_) => PaywallScreen(),
+        AppRoutes.equipamentos: (_) => const EquipamentosScreen(),
+        AppRoutes.clientes: (_) => const ClientsScreen(),
+        AppRoutes.unitConvert: (_) => const UnitConvertScreen(),
+        AppRoutes.cabosTabela: (_) => const CableTableScreen(),
+        AppRoutes.quedaTensao: (_) => const VoltageDropScreen(),
+        AppRoutes.deslocamento: (_) => const TravelCostScreen(),
+
+        // Extras (se você chamou por pushNamed em algum lugar)
+        '/sobre': (_) => const AboutScreen(),
+        '/parceiros': (_) => const ParceirosScreen(),
+        '/centro_pro': (_) => const CentroProScreen(),
+        AppRoutes.admin: (_) => const AdminScreen(),
+      };
+}

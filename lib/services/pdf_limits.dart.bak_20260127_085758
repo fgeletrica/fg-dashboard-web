@@ -1,0 +1,38 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PdfLimits {
+  static const _kKeyMonth = 'pdf_free_month';
+  static const _kKeyCount = 'pdf_free_count';
+
+  static String _monthKeyNow() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+  }
+
+  static Future<int> freeRemaining({int limitPerMonth = 3}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final nowKey = _monthKeyNow();
+    final savedMonth = prefs.getString(_kKeyMonth);
+    if (savedMonth != nowKey) {
+      await prefs.setString(_kKeyMonth, nowKey);
+      await prefs.setInt(_kKeyCount, 0);
+    }
+    final count = prefs.getInt(_kKeyCount) ?? 0;
+    final left = limitPerMonth - count;
+    return left < 0 ? 0 : left;
+  }
+
+  static Future<bool> consumeFreeOne({int limitPerMonth = 3}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final nowKey = _monthKeyNow();
+    final savedMonth = prefs.getString(_kKeyMonth);
+    if (savedMonth != nowKey) {
+      await prefs.setString(_kKeyMonth, nowKey);
+      await prefs.setInt(_kKeyCount, 0);
+    }
+    final count = prefs.getInt(_kKeyCount) ?? 0;
+    if (count >= limitPerMonth) return false;
+    await prefs.setInt(_kKeyCount, count + 1);
+    return true;
+  }
+}

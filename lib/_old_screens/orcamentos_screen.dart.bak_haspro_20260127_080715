@@ -1,0 +1,220 @@
+import 'package:flutter/material.dart';
+import '../services/pro_history_limits.dart';
+import '../models/budget_models.dart';
+import '../services/budget_store.dart';
+import 'budget_editor_screen.dart';
+
+class OrcamentosScreen extends StatefulWidget {
+  OrcamentosScreen({super.key});
+
+  @override
+  State<OrcamentosScreen> createState() => _OrcamentosScreenState();
+}
+
+class _OrcamentosScreenState extends State<OrcamentosScreen> {
+  bool _handledCalcArgs = false;
+
+  List<BudgetDoc> items = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_handledCalcArgs) return;
+    _handledCalcArgs = true;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map) return;
+    final fromCalc = args['from_calc'] == true;
+    if (!fromCalc) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      // Puxa dados do cálculo
+      final title = (args['title'] ?? 'Cálculo').toString();
+      final potW =
+          (args['potW'] is num) ? (args['potW'] as num).toDouble() : 0.0;
+      final tensaoV =
+          (args['tensaoV'] is num) ? (args['tensaoV'] as num).toDouble() : 0.0;
+      final distM =
+          (args['distM'] is num) ? (args['distM'] as num).toDouble() : 0.0;
+
+      final caboMm2 =
+          (args['caboMm2'] is num) ? (args['caboMm2'] as num).toDouble() : 0.0;
+      final disjA = (args['disjA'] is num) ? (args['disjA'] as num).toInt() : 0;
+
+      // Cria doc novo
+      final doc = BudgetDoc(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        clientName: '',
+        createdAt: DateTime.now(),
+        materials: [],
+        services: [],
+        marginPercent: true,
+        marginValue: 0,
+      );
+
+      // Preenche origem (aparece no topo do editor)
+      doc.originTitle = title;
+      doc.originPowerW = potW;
+      doc.originVoltage = (tensaoV > 0) ? tensaoV.round() : null;
+      // Sugestões automáticas pro orçamento
+      if (caboMm2 > 0 && distM > 0) {
+        final caboLenM = distM * 2.0 * 1.10; // ida+volta + 10%
+        doc.materials.add(
+          BudgetItem(
+            name: 'Cabo ${caboMm2.toStringAsFixed(1)} mm²',
+            qty: caboLenM,
+            unit: 'm',
+            unitPrice: 0,
+          ),
+        );
+      }
+      if (disjA > 0) {
+        doc.materials.add(
+          BudgetItem(
+            name: 'Disjuntor ${disjA} A',
+            qty: 1,
+            unit: 'un',
+            unitPrice: 0,
+          ),
+        );
+      }
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => BudgetEditorScreen(doc: doc)),
+      );
+
+      await load();
+    });
+  }
+
+  Future<void> load() async {
+    setState(() => loading = true);
+    items = await BudgetStore.loadBudgets();
+    // TODO: ligar com seu ProAccess (hasPro). Por enquanto fica FREE.
+    items = ProHistoryLimits.apply(items, hasPro: false);
+
+    setState(() => loading = false);
+  }
+
+  String money(double v) => "R\$ ${v.toStringAsFixed(2)}";
+
+  Future<void> createNew() async {
+    final doc = BudgetDoc(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      clientName: '',
+      createdAt: DateTime.now(),
+      materials: [],
+      services: [],
+      marginPercent: true,
+      marginValue: 0, // margem aqui não é a do fio; é margem do orçamento total
+    );
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BudgetEditorScreen(doc: doc)),
+    );
+
+    await load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Orçamentos'),
+        actions: [
+          IconButton(
+            tooltip: 'Atualizar',
+            onPressed: load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: createNew,
+        child: const Icon(Icons.add),
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : items.isEmpty
+              ? const Center(child: Text('Nenhum orçamento salvo ainda.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) {
+                    final b = items[i];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141A22),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFF2B2F3A)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.receipt_long),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  b.clientName.trim().isEmpty
+                                      ? 'Sem cliente'
+                                      : b.clientName,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Total: ${money(b.total)}',
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                                if (b.originTitle != null)
+                                  Text(
+                                    'Origem: ${b.originTitle}',
+                                    style:
+                                        const TextStyle(color: Colors.white60),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () async {
+                              await BudgetStore.delete(b.id);
+                              await load();
+                            },
+                            icon: const Icon(Icons.delete),
+                          ),
+                          IconButton(
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => BudgetEditorScreen(doc: b)),
+                              );
+                              await load();
+                            },
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}

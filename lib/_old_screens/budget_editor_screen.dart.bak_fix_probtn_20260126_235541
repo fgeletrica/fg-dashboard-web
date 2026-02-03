@@ -1,0 +1,946 @@
+import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
+import 'dart:typed_data';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
+import 'package:image_picker/image_picker.dart';
+import '../services/budget_photos.dart';
+
+import '../models/budget_models.dart';
+import '../services/budget_store.dart';
+import '../services/pdf_service.dart';
+import '../services/pro_access.dart';
+import '../services/materials_store.dart';
+import '../services/service_templates.dart';
+import 'service_picker_screen.dart';
+import 'signature_screen.dart';
+import 'services_pro_screen.dart';
+import '../routes/app_routes.dart';
+
+class BudgetEditorScreen extends StatefulWidget {
+  final BudgetDoc doc;
+  const BudgetEditorScreen({super.key, required this.doc});
+
+  @override
+  State<BudgetEditorScreen> createState() => _BudgetEditorScreenState();
+}
+
+class _BudgetEditorScreenState extends State<BudgetEditorScreen> {
+  static const String _kFreeFirstPdfDone = 'free_first_pdf_done_v1';
+  bool? _freePdfDoneCache;
+
+  Future<bool> _isFreePdfDone() async {
+    if (_freePdfDoneCache != null) return _freePdfDoneCache!;
+    final sp = await SharedPreferences.getInstance();
+    _freePdfDoneCache = sp.getBool(_kFreeFirstPdfDone) ?? false;
+    return _freePdfDoneCache!;
+  }
+
+  Future<void> _markFreePdfDone() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kFreeFirstPdfDone, true);
+    _freePdfDoneCache = true;
+  }
+
+  late BudgetDoc doc;
+
+  final clientCtrl = TextEditingController();
+  // ---- controllers persistentes (pra não bugar digitação) ----
+  final Map<String, TextEditingController> _fieldCtrs = {};
+
+  TextEditingController _ctr(String key, String initial) {
+    final c =
+        _fieldCtrs.putIfAbsent(key, () => TextEditingController(text: initial));
+    return c;
+  }
+
+  void _dropCtrPrefix(String prefix) {
+    final keys = _fieldCtrs.keys.where((k) => k.startsWith(prefix)).toList();
+    for (final k in keys) {
+      _fieldCtrs[k]?.dispose();
+      _fieldCtrs.remove(k);
+    }
+  }
+
+  final marginCtrl = TextEditingController();
+
+  bool showMaterials = false;
+  bool showServices = true;
+
+  @override
+  void initState() {
+    super.initState();
+    doc = widget.doc;
+    clientCtrl.text = doc.clientName;
+    marginCtrl.text = doc.marginValue.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    for (final c in _fieldCtrs.values) {
+      c.dispose();
+    }
+    _fieldCtrs.clear();
+    clientCtrl.dispose();
+    marginCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<bool> _isFreeDone() async {
+    return false; // FREE ilimitado
+  }
+
+  double toDouble(String s) =>
+      double.tryParse(s.replaceAll(',', '.').trim()) ?? 0.0;
+  String money(double v) => "R\$ ${v.toStringAsFixed(2)}";
+
+  InputDecoration dec(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFF141A22),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+
+  Future<void> _pickAndAddPhoto(String label) async {
+    final has = await ProAccess.hasProAccessNow();
+    if (!has) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fotos Antes/Depois é PRO ✅')),
+      );
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+      maxWidth: 1600,
+    );
+    if (file == null) return;
+
+    final bytes = await File(file.path).readAsBytes();
+    final b64 = base64Encode(bytes);
+
+    final photo = BudgetPhoto(
+      createdAtMs: DateTime.now().millisecondsSinceEpoch,
+      kind: 'before',
+      note: '',
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      b64: b64,
+    );
+
+    setState(() {
+      doc.photos.add(photo);
+    });
+
+    await save();
+  }
+
+  void addMaterial() => setState(() => doc.materials
+      .add(BudgetItem(name: "Material", qty: 1, unit: "un", unitPrice: 0)));
+
+  Future<void> _addMaterialGuarded() async {
+    addMaterial();
+  }
+
+  void _addServiceTemplate(ServiceTemplate t) {
+    setState(() {
+      doc.services
+          .add(BudgetServiceLine(name: t.title, price: t.priceSuggested));
+    });
+  }
+
+  Future<void> _openServicePicker() async {
+    final picked = await Navigator.push<ServiceTemplate?>(
+      context,
+      MaterialPageRoute(builder: (_) => const ServicePickerScreen()),
+    );
+    if (picked == null) return;
+    _addServiceTemplate(picked);
+  }
+
+  void addServiceManual() => setState(
+      () => doc.services.add(BudgetServiceLine(name: "Serviço", price: 0)));
+
+  Future<void> save() async {
+    doc.clientName = clientCtrl.text.trim();
+    doc.marginValue = toDouble(marginCtrl.text);
+
+    await BudgetStore.upsert(doc);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("Orçamento salvo ✅")));
+    setState(() {});
+  }
+
+  Future<void> signOptional() async {
+    final b64 = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute(builder: (_) => const SignatureScreen()),
+    );
+    if (b64 == null) return;
+    setState(() => doc.signatureB64 = b64);
+    await save();
+  }
+
+  Future<void> exportPdf({required bool share}) async {
+    try {
+      final file = await PdfService.generateBudgetPdf(doc: doc);
+      if (!mounted) return;
+
+      if (share) {
+        await Share.shareXFiles([XFile(file.path)],
+            text: "Orçamento FG Elétrica");
+      } else {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Abrindo PDF...")));
+        await OpenFilex.open(file.path);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erro ao gerar PDF: $e")),
+      );
+    }
+  }
+
+  Future<void> applyMaterialPricesFromDb() async {
+    final db = await MaterialsStore.load();
+    final hasProNow = await ProAccess.hasProAccessNow();
+    final done = await _isFreeDone();
+    final locked = (!hasProNow && done);
+    if (db.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text("Cadastre materiais em: Ferramentas → Meus Materiais")));
+      return;
+    }
+
+    int hits = 0;
+    for (final it in doc.materials) {
+      final name = it.name.toLowerCase().trim();
+      if (name.isEmpty) continue;
+
+      MaterialDbItem? best;
+      for (final m in db) {
+        final mn = m.name.toLowerCase().trim();
+        if (mn.isEmpty) continue;
+        if (name.contains(mn) || mn.contains(name)) {
+          best = m;
+          break;
+        }
+      }
+      if (best != null) {
+        it.unit = best!.unit;
+        it.unitPrice = best!.price;
+        hits++;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {});
+    _dropCtrPrefix('mat_');
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Preços aplicados em $hits item(ns).")));
+  }
+
+  Future<void> addServiceFromProWizard() async {
+    final has = await ProAccess.hasProAccessNow();
+    if (!has) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Recurso PRO — desbloqueie para usar ✅")));
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    if (!mounted) return;
+    final r = await Navigator.push<Map?>(
+      context,
+      MaterialPageRoute(builder: (_) => const ServicesProScreen()),
+    );
+    if (r == null) return;
+
+    final name = (r['name'] ?? '').toString();
+    final price = (r['price'] is num) ? (r['price'] as num).toDouble() : 0.0;
+
+    if (name.trim().isEmpty) return;
+    setState(() =>
+        doc.services.add(BudgetServiceLine(name: name.trim(), price: price)));
+  }
+
+  bool get hasSignature =>
+      doc.signatureB64 != null && doc.signatureB64!.trim().isNotEmpty;
+
+  Future<void> _pickMaterialFromDb(BuildContext context, dynamic it) async {
+    final hasProNow = await ProAccess.hasProAccessNow();
+    final freeDone = await _isFreePdfDone();
+    final db = await MaterialsStore.load();
+    final hasPro = await ProAccess.hasProAccessNow();
+    final done = await _isFreeDone();
+    final locked = (!hasProNow && done);
+    if (!mounted) return;
+    if (db.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Cadastre materiais em Meus Materiais primeiro.')));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Selecionar material",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: db.length,
+                itemBuilder: (_, i) {
+                  final m = db[i];
+                  return ListTile(
+                    leading: const Icon(Icons.inventory_2),
+                    title: Text(m.name),
+                    subtitle: Text(
+                        "Un: ${m.unit} • R\$ ${m.price.toStringAsFixed(2)}"),
+                    onTap: () {
+                      if (locked) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  "FREE: após o 1º PDF, selecionar materiais é PRO ✅")),
+                        );
+                        Navigator.of(context).pushNamed(AppRoutes.paywall);
+                        return;
+                      }
+                      setState(() {
+                        it.name = m.name;
+                        it.unit = m.unit;
+                        it.unitPrice = m.price;
+                      });
+                      // força atualizar os TextFields (controllers persistentes)
+                      try {
+                        _ctr('mat_name_${(it.hashCode)}', it.name).text =
+                            it.name;
+                        _ctr('mat_unit_${(it.hashCode)}', it.unit).text =
+                            it.unit;
+                        _ctr('mat_price_${(it.hashCode)}',
+                                it.unitPrice.toStringAsFixed(2))
+                            .text = it.unitPrice.toStringAsFixed(2);
+                      } catch (_) {}
+
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+
+// === PHOTOS_BLOCK_START
+  Future<void> _addPhoto(String kind) async {
+    // Desktop (Linux/Windows/macOS): image_picker pode não funcionar.
+    final tp = defaultTargetPlatform;
+    final isMobile = (tp == TargetPlatform.android || tp == TargetPlatform.iOS);
+    if (!isMobile) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Fotos: teste no celular (Android/iOS) ✅')),
+        );
+      }
+      return;
+    }
+    final has = await ProAccess.hasProAccessNow();
+    if (!has) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fotos Antes/Depois é PRO ✅')),
+      );
+      Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+      maxWidth: 1600,
+    );
+    if (file == null) return;
+
+    // MOBILE: câmera | DESKTOP (Ubuntu): escolher arquivo
+    Uint8List bytes;
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+        maxWidth: 1600,
+      );
+      if (file == null) return;
+      bytes = await File(file.path).readAsBytes();
+    } else {
+      final typeGroup = XTypeGroup(
+        extensions: const ['png', 'jpg', 'jpeg', 'webp'],
+      );
+      final xf = await openFile(acceptedTypeGroups: [typeGroup]);
+      if (xf == null) return;
+      bytes = await xf.readAsBytes();
+    }
+
+    final b64 = base64Encode(bytes);
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final photo = BudgetPhoto(
+      id: id,
+      kind: kind, // 'before' | 'after'
+      b64: b64,
+      note: '',
+      createdAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    setState(() => doc.photos.add(photo));
+    await save();
+  }
+
+  void _removePhoto(String id) {
+    setState(() => doc.photos.removeWhere((p) => p.id == id));
+    save();
+  }
+
+  Widget _photosBlock() {
+    final before = doc.photos.where((p) => p.kind == 'before').toList();
+    final after = doc.photos.where((p) => p.kind == 'after').toList();
+
+    Widget grid(List<BudgetPhoto> list) {
+      if (list.isEmpty) {
+        return Text('Nenhuma foto ainda.',
+            style: TextStyle(
+                color: Colors.white.withOpacity(.65),
+                fontWeight: FontWeight.w600));
+      }
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: list.map((p) {
+          final Uint8List img = Uint8List.fromList(base64Decode(p.b64));
+          final label = (p.kind == 'after') ? 'DEPOIS' : 'ANTES';
+
+          return Container(
+            width: 150,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141A22),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF2B2F3A)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (p.kind == 'after')
+                            ? Colors.green.withOpacity(.15)
+                            : Colors.blue.withOpacity(.15),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: (p.kind == 'after')
+                              ? Colors.green.withOpacity(.35)
+                              : Colors.blue.withOpacity(.35),
+                        ),
+                      ),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 11),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Remover',
+                      onPressed: () => _removePhoto(p.id),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(img,
+                      height: 90, width: 130, fit: BoxFit.cover),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _ctr('photo_note_${p.id}', p.note),
+                  decoration: dec('Obs (opcional)'),
+                  onChanged: (v) {
+                    final idx = doc.photos.indexWhere((x) => x.id == p.id);
+                    if (idx >= 0) {
+                      doc.photos[idx] = BudgetPhoto(
+                        id: p.id,
+                        kind: p.kind,
+                        b64: p.b64,
+                        note: v,
+                        createdAtMs: p.createdAtMs,
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      );
+    }
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Fotos (Antes/Depois)',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _addPhoto('before'),
+                  icon: const Icon(Icons.camera_alt_outlined, size: 18), label: const Text('')),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _addPhoto('after'),
+                  icon: const Icon(Icons.camera_alt_outlined, size: 18), label: const Text('')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('ANTES',
+              style: TextStyle(
+                  color: Colors.white.withOpacity(.85),
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          grid(before),
+          const SizedBox(height: 14),
+          Text('DEPOIS',
+              style: TextStyle(
+                  color: Colors.white.withOpacity(.85),
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          grid(after),
+        ],
+      ),
+    );
+  }
+  // === PHOTOS_BLOCK_END
+
+  Widget build(BuildContext context) {
+    final canGenerate = clientCtrl.text.trim().isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Orçamento"),
+        actions: [
+          IconButton(
+            tooltip: "Salvar",
+            onPressed: save,
+            icon: const Icon(Icons.save),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (doc.originTitle != null)
+            _card(
+              child: Text(
+                "Origem: ${doc.originTitle} • ${doc.originPowerW?.toStringAsFixed(0) ?? '—'}W • ${doc.originVoltage ?? '—'}V",
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+
+          // =========================
+          // CLIENTE + SERVIÇOS
+          // =========================
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "Cliente & Serviços",
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => showServices = !showServices),
+                      child: Text(showServices ? "Ocultar" : "Mostrar"),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: clientCtrl,
+                  decoration: dec("Nome do cliente"),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: signOptional,
+                    icon: Icon(
+                        hasSignature
+                            ? Icons.verified
+                            : Icons.border_color_outlined,
+                        size: 18),
+                    label: Text(hasSignature
+                        ? "Assinado ✅ (opcional)"
+                        : "Assinar (opcional)"),
+                  ),
+                ),
+                if (showServices) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _openServicePicker,
+                          icon: const Icon(Icons.playlist_add, size: 18), label: const Text('')),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(onPressed: addServiceFromProWizard,
+                          icon: const Icon(Icons.auto_fix_high),
+                        , label: const Text('')),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: addServiceManual,
+                      icon: const Icon(Icons.add, size: 18), label: const Text('')),
+                  ),
+                  const SizedBox(height: 10),
+                  ...doc.services.asMap().entries.map((e) {
+                    final i = e.key;
+                    final s = e.value;
+                    return _card(
+                      child: Column(
+                        children: [
+                          _head(
+                            "Serviço",
+                            onDelete: () =>
+                                setState(() => doc.services.removeAt(i)),
+                          ),
+                          TextField(
+                            controller:
+                                _ctr('svc_name_${(s.hashCode)}', s.name),
+                            decoration: dec("Nome do serviço"),
+                            onChanged: (v) => s.name = v,
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _ctr('svc_price_${(s.hashCode)}',
+                                s.price.toStringAsFixed(2)),
+                            decoration: dec("Valor (R\$)"),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                setState(() => s.price = toDouble(v)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ],
+            ),
+          ),
+
+          // =========================
+          // MATERIAIS
+          // =========================
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "Materiais (opcional)",
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => showMaterials = !showMaterials),
+                      child: Text(showMaterials ? "Ocultar" : "Mostrar"),
+                    ),
+                  ],
+                ),
+                if (showMaterials) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _addMaterialGuarded,
+                          icon: const Icon(Icons.add), label: const Text('')),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: applyMaterialPricesFromDb,
+                          icon: const Icon(Icons.price_check), label: const Text('')),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...doc.materials.asMap().entries.map((e) {
+                    final i = e.key;
+                    final it = e.value;
+                    return _card(
+                      child: Column(
+                        children: [
+                          _head("Material",
+                              onDelete: () =>
+                                  setState(() => doc.materials.removeAt(i))),
+                          TextField(
+                            controller:
+                                _ctr('mat_name_${(it.hashCode)}', it.name),
+                            decoration: dec("Nome do material"),
+                            onChanged: (v) => it.name = v,
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _pickMaterialFromDb(context, it),
+                              icon: const Icon(Icons.list_alt, size: 18), label: const Text('')),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _ctr('mat_qty_${(it.hashCode)}',
+                                      it.qty.toStringAsFixed(2)),
+                                  decoration: dec("Qtd"),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  onChanged: (v) =>
+                                      setState(() => it.qty = toDouble(v)),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _ctr(
+                                      'mat_unit_${(it.hashCode)}', it.unit),
+                                  decoration: dec("Un"),
+                                  onChanged: (v) => setState(() => it.unit = v),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _ctr('mat_price_${(it.hashCode)}',
+                                it.unitPrice.toStringAsFixed(2)),
+                            decoration: dec("Preço unitário (R\$)"),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                setState(() => it.unitPrice = toDouble(v)),
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              "Total: ${money(it.total)}",
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ],
+            ),
+          ),
+
+          // =========================
+          // RESUMO
+          // =========================
+          _card(
+            child: Column(
+              children: [
+                const SizedBox.shrink(),
+                const SizedBox(height: 10),
+                _row("Subtotal materiais", money(doc.subtotalMaterials)),
+                _row("Subtotal serviços", money(doc.subtotalServices)),
+                _row("Margem", money(doc.marginAmount)),
+                const Divider(),
+                _row("TOTAL", money(doc.total), strong: true),
+              ],
+            ),
+          ),
+
+          FutureBuilder<bool>(
+            future: ProAccess.hasProAccessNow(),
+            builder: (context, snap) {
+              final pro = snap.data ?? false;
+              return Text(
+                pro
+                    ? "PRO ativo: PDF sai limpo ✅"
+                    : "FREE: PDF sai com marca d'água ✅ (PRO remove)",
+                style: const TextStyle(color: Colors.white70),
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+          _photosBlock(),
+
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canGenerate ? () => exportPdf(share: false) : null,
+                  icon: const Icon(Icons.picture_as_pdf), label: const Text('')),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canGenerate ? () => exportPdf(share: true) : null,
+                  icon: const Icon(Icons.share), label: const Text('')),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141A22),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF2B2F3A)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _head(String title, {required VoidCallback onDelete}) {
+    return Row(
+      children: [
+        const Icon(Icons.drag_indicator),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(title,
+                style: const TextStyle(fontWeight: FontWeight.w900))),
+        IconButton(onPressed: onDelete, icon: const Icon(Icons.delete)),
+      ],
+    );
+  }
+
+  Widget _row(String a, String b, {bool strong = false}) {
+    final style = TextStyle(
+      color: strong ? Colors.white : Colors.white70,
+      fontWeight: strong ? FontWeight.w900 : FontWeight.w600,
+      fontSize: strong ? 16 : 14,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(a, style: style)),
+          Text(b, style: style),
+        ],
+      ),
+    );
+  }
+
+  Widget _signatureBlock() {
+    final ok = hasSignature;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Assinatura do cliente",
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            ok ? "✅ Assinatura adicionada" : "Sem assinatura ainda.",
+            style: TextStyle(
+                color: Colors.white.withOpacity(.7),
+                fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(onPressed: signOptional,
+              icon: const Icon(Icons.draw),
+            label: const Text('')),
+          ),
+        ],
+      ),
+    );
+  }
+}

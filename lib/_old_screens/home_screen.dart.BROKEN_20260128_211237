@@ -1,0 +1,735 @@
+import 'dart:async';
+import 'services_market_screen.dart';
+import 'package:flutter/material.dart';
+import 'advanced_screen.dart';
+import '../services/app_mode_store.dart';
+import 'mode_select_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../widgets/pro_trial_countdown.dart';
+import '../services/profile_store.dart';
+import '../services/auth/auth_service.dart';
+import 'about_screen.dart';
+import 'parceiros_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isPro = false;
+
+  String _role = 'client';
+  Timer? _cupomTimer;
+  Timer? _cupomTicker;
+  int? _cupomEndAtMs;
+
+  bool _cupomEnabled = false;
+  String _cupomCode = '';
+  String _cupomPct = '';
+static const String _kCupomEndAtMs = 'cupom_endat_ms_v1';
+  int? _cupomEndAt;
+
+  String _cupomUntil = '';
+
+
+  Timer? _adminHold;
+
+  String _company = 'FG Elétrica';
+  String _name = '';
+
+  static const _kSeenHomeTutorial = 'seen_home_tutorial_v1';
+  static const _kHomeNotice = 'home_notice_v1';
+
+  String _homeNotice = '';
+
+
+  Future<void> _reloadCupomFromPrefs() async {
+    final sp = await SharedPreferences.getInstance();
+
+    final enabled = sp.getBool('cupom_enabled_v1') ?? false;
+    final code = (sp.getString('cupom_code_v1') ?? '').trim();
+    final pct  = (sp.getString('cupom_pct_v1') ?? '').trim();
+    final endAtMs = sp.getInt('cupom_endat_ms_v1');
+
+    if (!mounted) return;
+    setState(() {
+      _cupomEnabled = enabled;
+      _cupomCode = code;
+      _cupomPct = pct;
+      _cupomEndAtMs = endAtMs;
+    });
+  }
+
+  Future<void> _loadCupom() async {
+    _startCupomTicker();
+    final sp = await SharedPreferences.getInstance();
+    final enabled = sp.getBool('cupom_enabled_v1') ?? false;
+    final code = (sp.getString('cupom_code_v1') ?? '').trim();
+    final pct  = (sp.getString('cupom_pct_v1') ?? '').trim();
+        
+    final endAtMs = sp.getInt('cupom_endat_ms_v1');
+// auto-desativa se expirou
+    final endAt = _cupomEndAtMs;
+    if (endAt != null && DateTime.now().millisecondsSinceEpoch > endAt) {
+      await sp.setBool('cupom_enabled_v1', false);
+    }
+
+    final until = (sp.getString('cupom_until_v1') ?? '').trim();
+    if (!mounted) return;
+    setState(() {
+      _cupomEnabled = enabled || (endAtMs != null && DateTime.now().millisecondsSinceEpoch < endAtMs);
+      _cupomCode = code;
+      _cupomPct = pct;
+      _cupomEndAtMs = endAtMs;
+      _cupomUntil = until;
+    });
+  }
+
+  @override
+  void initState() {
+    _loadRole();
+
+    super.initState();
+    _startCupomTimer();
+    _loadCupom();
+    _startCupomTicker();
+    _startCupomTicker();
+    _loadProfile();
+    _loadRole();
+    _loadHomeNotice();
+    _maybeShowTutorialOnce();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final p = await ProfileStore.get();
+      if (!mounted) return;
+      setState(() {
+        _company = (p.company.trim().isEmpty) ? 'FG Elétrica' : p.company.trim();
+        _name = p.name.trim();
+      });
+    } catch (_) {}
+  }
+
+    Future<void> _loadHomeNotice() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final txt = (sp.getString(_kHomeNotice) ?? '').trim();
+      if (!mounted) return;
+      setState(() => _homeNotice = txt);
+    } catch (_) {}
+  }
+
+Future<void> _maybeShowTutorialOnce() async {
+    final sp = await SharedPreferences.getInstance();
+    final seen = sp.getBool(_kSeenHomeTutorial) ?? false;
+    if (seen) return;
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Como usar (rápido)'),
+        content: const Text(
+          '• Meu Painel: atalhos principais.\n'
+          '• Equipamentos: alguns itens são PRO.\n'
+          '• Cálculo Elétrico: potência, tensão, distância.\n'
+          '• Conta: configure seu nome e aceite o termo.\n',
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Avançado',
+            icon: const Icon(Icons.tune),
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdvancedScreen()));
+            },
+          ),
+
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Agora não'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.of(context).pushNamed(AppRoutes.tutoriais);
+            },
+            child: const Text('Ver tutoriais'),),
+        ],
+],
+      ),
+    );
+
+    await sp.setBool(_kSeenHomeTutorial, true);
+  }
+
+
+  void _startCupomTicker() {
+    _cupomTicker?.cancel();
+    _cupomTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_cupomEndAt == null) return;
+      // força rebuild do texto
+      setState(() {});
+    });
+  }
+
+  
+  String _cupomHeadline() {
+    final code = _cupomCode.trim();
+    final pct = _cupomPct.trim();
+    if (!_cupomEnabled || code.isEmpty) return '';
+    final now = DateTime.now().millisecondsSinceEpoch;
+    
+    if (_cupomEndAtMs == null) {
+      return 'Cupom $code${pct.isNotEmpty ? " ($pct%)" : ""} — ativo';
+    }
+    final endAt = _cupomEndAtMs;
+    if (endAt == null) return "";
+    final int left = endAt - now;
+    if (left <= 0) return 'Cupom $code${pct.isNotEmpty ? " ($pct%)" : ""} — expirado';
+    return 'Cupom $code${pct.isNotEmpty ? " ($pct%)" : ""} — expira em ${_fmtLeft(left)}';
+  }
+
+String _fmtLeft(int msLeft) {
+    if (msLeft <= 0) return 'expirado';
+    final s = (msLeft / 1000).floor();
+    final d = s ~/ 86400;
+    final h = (s % 86400) ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    return '${d}d ${h}h ${m}m';
+  }
+  void _startCupomTimer() {
+    _cupomTimer?.cancel();
+    _cupomTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+
+      // Só atualiza se existir expiração do cupom
+      if (_cupomEndAtMs == null) return;
+
+      final left = _cupomEndAtMs! - DateTime.now().millisecondsSinceEpoch;
+
+      // Se expirou, desativa e limpa
+      if (left <= 0) {
+        setState(() {
+          _cupomEnabled = false;
+          _cupomEndAtMs = null;
+        });
+        _cupomTimer?.cancel();
+        return;
+      }
+
+      // Ainda ativo -> força rebuild do texto
+      setState(() {});
+    });
+  }
+
+
+  @override
+  void dispose() {
+    _cupomTicker?.cancel();
+    _cupomTicker?.cancel();
+    _cupomTicker?.cancel();
+      _cupomTicker?.cancel();
+_adminHold?.cancel();
+    super.dispose();
+  }
+
+  void _go(String route) => Navigator.of(context).pushNamed(route);
+
+  Future<void> _openWhatsApp() async {
+    final uri = Uri.parse('https://wa.me/5521997901083');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+
+  
+
+  String _fmtRemaining(Duration d) {
+    if (d.isNegative) return "expirado";
+    final days = d.inDays;
+    final hours = d.inHours % 24;
+    final mins = d.inMinutes % 60;
+    if (days > 0) return "${days}d ${hours}h";
+    if (hours > 0) return "${hours}h ${mins}min";
+    return "${mins}min";
+  }
+Widget _pill(String text, {Color? bg, Color? fg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg ?? Colors.white.withOpacity(.08),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: AppTheme.border.withOpacity(.25)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: fg ?? Colors.white.withOpacity(.9),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _gridCard(IconData icon, String title, VoidCallback onTap, {bool proTag = false}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.border.withOpacity(.35)),
+          boxShadow: const [
+            BoxShadow(blurRadius: 14, offset: Offset(0, 8), color: Color(0x22000000)),
+          ],
+],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+if (_isPro) ...[
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.gold.withOpacity(.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+              ),
+              child: Icon(icon, color: AppTheme.gold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 15,
+              ),
+            ),
+            if (proTag) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.gold.withOpacity(.14),
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+                ),
+                child: Text('PRO',
+                    style: TextStyle(
+                        color: AppTheme.gold,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12)),
+              ),
+              const SizedBox(height: 10),
+            ],
+],
+            const Spacer(),
+            Row(
+              children: [
+if (_isPro) ...[
+                Text('Abrir', style: TextStyle(color: Colors.white.withOpacity(.65), fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+              ],
+],
+            )
+          ],
+],
+        ),
+      ),
+    );
+  }
+
+  Widget _cupomCountdownWidget() {
+    if (!_cupomEnabled || _cupomCode.isEmpty || _cupomEndAtMs == null) {
+      return const SizedBox.shrink();
+    }
+
+    final left = _cupomEndAtMs! - DateTime.now().millisecondsSinceEpoch;
+    if (left <= 0) return const SizedBox.shrink();
+
+    final pct = _cupomPct.isNotEmpty ? " (\${_cupomPct}%)" : "";
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+      ),
+      child: Row(
+        children: [
+if (_isPro) ...[
+          const Icon(Icons.local_offer, color: AppTheme.gold),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "Cupom \$_cupomCode\$pct — termina em \${_fmtLeft(left)}",
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+],
+      ),
+    );
+  }
+
+  Widget _partnersTab() {
+    return const ParceirosScreen();
+  
+  Future<void> _loadRole() async {
+    try {
+      final role = await AuthService.getMyRole();
+      if (!mounted) return;
+      setState(() => _isPro = role == 'pro');
+    } catch (_) {}
+  }
+
+}
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(length: 3,
+      child: Scaffold(
+        backgroundColor: AppTheme.bg,
+        appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Trocar modo',
+            icon: const Icon(Icons.swap_horiz),
+            onPressed: () async {
+              await AppModeStore.clear();
+              if (!context.mounted) return;
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const ModeSelectScreen()),
+              );
+            },
+          ),
+        ],
+],
+          backgroundColor: AppTheme.bg,
+          elevation: 0,
+          titleSpacing: 12,
+          title: Row(
+            children: [
+if (_isPro) ...[
+              Container(
+                height: 38,
+                width: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.card,
+                  border: Border.all(color: AppTheme.border.withOpacity(.35)),
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/logo.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Icon(Icons.bolt, color: AppTheme.gold, size: 22),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // ✅ Segurar 5s no título para abrir Admin
+              GestureDetector(
+                onTapDown: (_) {
+                  _adminHold?.cancel();
+                  _adminHold = Timer(const Duration(seconds: 5), () {
+                    if (!mounted) return;
+                    Navigator.of(context).pushNamed(AppRoutes.admin);
+                  });
+                },
+                onTapUp: (_) => _adminHold?.cancel(),
+                onTapCancel: () => _adminHold?.cancel(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+if (_isPro) ...[
+                    Text(
+                      _company,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                    ),
+                    if (_name.isNotEmpty)
+                      Text(
+                        _name,
+                        style: TextStyle(color: Colors.white.withOpacity(.65), fontWeight: FontWeight.w700, fontSize: 12),
+                      ),
+                  ],
+],
+                ),
+              ),
+
+              const Spacer(),
+
+              IconButton(
+                onPressed: () => _go(AppRoutes.tutoriais),
+                icon: const Icon(Icons.help_outline),
+                color: Colors.white.withOpacity(.9),
+                tooltip: 'Tutoriais',
+              ),
+              IconButton(
+                tooltip: 'Sobre o app',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                ),
+                icon: const Icon(Icons.error_outline),
+                color: Colors.white.withOpacity(.9),
+              ),
+              IconButton(
+                onPressed: () async { await Navigator.of(context).pushNamed(AppRoutes.conta); await _loadProfile();
+    _loadRole(); },
+                icon: const Icon(Icons.account_circle_outlined),
+                color: Colors.white.withOpacity(.9),
+              ),
+            ],
+],
+          ),
+          bottom: TabBar(
+            indicatorColor: AppTheme.gold,
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white.withOpacity(.6),
+            tabs: const [
+              Tab(text: 'Meu Painel'),
+              Tab(text: 'Parceiros'),
+              if (_isPro) const Tab(text: 'Serviços'),
+            ],
+],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+if (_isPro) ...[
+            SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+if (_isPro) ...[
+
+                    // Aviso do app (configurado no Admin)
+                    if (_homeNotice.trim().isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.card,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+                        ),
+                        child: Row(
+                          children: [
+if (_isPro) ...[
+                            Icon(Icons.campaign, color: AppTheme.gold),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _homeNotice,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(.90),
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ),
+                          ],
+],
+                        ),
+                      ),
+
+                    // Status PRO / trial
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.card,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+                      ),
+                      child: Row(
+                        children: [
+if (_isPro) ...[
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+if (_isPro) ...[
+                                Text(
+                                  '${((_cupomCode.isNotEmpty) && (_cupomEnabled || (_cupomEndAtMs != null && DateTime.now().millisecondsSinceEpoch < _cupomEndAtMs!))) ? 'Cupom ativo:' : 'Teste grátis PRO termina em:'}',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(.78),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                DefaultTextStyle(
+                                  style: TextStyle(
+                                    color: AppTheme.gold,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                  child: ((_cupomCode.isNotEmpty) && (_cupomEnabled || (_cupomEndAtMs != null && DateTime.now().millisecondsSinceEpoch < _cupomEndAtMs!)))
+                                      ? Text('$_cupomCode (${_cupomPct.isEmpty ? '0' : _cupomPct}%)')
+                                      : const ProTrialCountdown(),
+                                ),
+
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+if (_isPro) ...[
+                                    _pill('Plano Mensal'),
+                                    _pill('Oferta Anual',
+                                        bg: AppTheme.gold.withOpacity(.12),
+                                        fg: AppTheme.gold),
+                                  ],
+],
+                                ),
+                              ],
+],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.gold,
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            ),
+                            onPressed: () => _go(AppRoutes.paywall),
+                            child: const Text(
+                              'Ver PRO',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // ✅ HOME EM GRADE (2 colunas)
+                    GridView.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.05,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+if (_isPro) ...[
+
+                    _gridCard(Icons.calculate_outlined, 'Cálculo\nElétrico', () => _go(AppRoutes.calc)),
+                    _gridCard(Icons.handyman_outlined, 'Ferramentas', () => _go(AppRoutes.ferramentas)),
+                    _gridCard(Icons.ac_unit, 'Equipamentos', () => _go(AppRoutes.equipamentos), proTag: true),
+
+                    _gridCard(Icons.receipt_long_outlined, 'Orçamentos', () => _go(AppRoutes.orcamentos)),
+                    _gridCard(Icons.event_note_outlined, 'Agenda', () => _go(AppRoutes.agenda)),
+                    _gridCard(Icons.lightbulb_outline, 'Tutoriais', () => _go(AppRoutes.tutoriais)),
+
+                    _gridCard(Icons.error_outline, 'Sobre\no app', () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()));
+                    }),
+                    _gridCard(Icons.support_agent, 'Fale\nConosco', () => _openWhatsApp()),
+
+],
+],
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    InkWell(
+                      onTap: () => _go(AppRoutes.orcamentos),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: AppTheme.card,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.gold.withOpacity(.35)),
+                        ),
+                        child: Row(
+                          children: [
+if (_isPro) ...[
+                            const SizedBox(width: 16),
+                            Container(
+                              height: 46,
+                              width: 46,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppTheme.gold.withOpacity(.18),
+                                border: Border.all(color: AppTheme.gold.withOpacity(.45)),
+                              ),
+                              child: Icon(Icons.bolt, color: AppTheme.gold),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Text(
+                                'Novo Orçamento',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            Icon(Icons.chevron_right, color: Colors.white.withOpacity(.55)),
+                            const SizedBox(width: 14),
+                          ],
+],
+                        ),
+                      ),
+                    ),
+                  ],
+],
+                ),
+              ),
+            ),
+            _partnersTab(),
+          _servicesTab(),
+          ],
+],
+        ),
+      ),
+    );
+  }
+}
+
+  Widget _servicesTab() {
+    return const ServicesMarketScreen();
+  }
+
+
+
+  Future<void> _loadRole() async {
+    try {
+      final r = await AuthService.getMyRole();
+      if (!mounted) return;
+      setState(() => _role = r);
+    } catch (_) {}
+  }

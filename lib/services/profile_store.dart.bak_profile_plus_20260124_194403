@@ -1,0 +1,66 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class AppProfile {
+  final String name;
+  final String phone;
+  final String email;
+  final String company;
+
+  AppProfile({
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.company,
+  });
+}
+
+class ProfileStore {
+  static const _k = 'profile_v1';
+
+  static Future<AppProfile> get() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_k);
+    if (raw == null || raw.trim().isEmpty) {
+      return AppProfile(
+        name: 'Felype Guimarães',
+        phone: '',
+        email: '',
+        company: 'FG Elétrica',
+      );
+    }
+    try {
+      final j = jsonDecode(raw);
+      if (j is Map) {
+        return AppProfile(
+          name: (j['name'] ?? 'Felype Guimarães').toString(),
+          phone: (j['phone'] ?? '').toString(),
+          email: (j['email'] ?? '').toString(),
+          company: (j['company'] ?? 'FG Elétrica').toString(),
+        );
+      }
+    } catch (_) {}
+    return AppProfile(
+      name: 'Felype Guimarães',
+      phone: '',
+      email: '',
+      company: 'FG Elétrica',
+    );
+  }
+
+  static Future<void> set({
+    required String name,
+    required String phone,
+    required String email,
+    required String company,
+  }) async {
+    final p = await SharedPreferences.getInstance();
+    final data = jsonEncode({
+      'name': name.trim(),
+      'phone': phone.trim(),
+      'email': email.trim(),
+      'company': company.trim(),
+    });
+    await p.setString(_k, data);
+  }
+}

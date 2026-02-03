@@ -1,0 +1,32 @@
+import 'package:flutter/material.dart';
+import '../services/app_mode_store.dart';
+import 'home_screen.dart';
+import 'gate_screen.dart';
+import 'industrial_home_screen.dart';
+import 'mode_select_screen.dart';
+
+class AppEntry extends StatelessWidget {
+  const AppEntry({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: AppModeStore.getMode(),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
+        }
+        final mode = snap.data;
+        if (mode == null) {
+          // padrão: residencial (industrial fica no Avançado)
+          AppModeStore.setMode('res');
+          return const GateScreen();
+        }
+
+        if (mode == 'ind') return const IndustrialHomeScreen();
+        return const GateScreen();
+      },
+    );
+  }
+}

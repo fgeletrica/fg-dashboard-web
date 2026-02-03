@@ -1,0 +1,68 @@
+import 'package:flutter/material.dart';
+import '../services/profile_store.dart';
+import '../models/company_profile.dart';
+import '../services/pro_access.dart';
+import '../routes/app_routes.dart';
+
+class CompanyProfileScreen extends StatefulWidget {
+  const CompanyProfileScreen({super.key});
+
+  @override
+  State<CompanyProfileScreen> createState() => _CompanyProfileScreenState();
+}
+
+class _CompanyProfileScreenState extends State<CompanyProfileScreen> {
+  final nameCtrl = TextEditingController();
+  final cnpjCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final p = await ProfileStore.loadCompanyProfile();
+    if (p != null) {
+      nameCtrl.text = p.name;
+      cnpjCtrl.text = p.cnpj ?? '';
+      phoneCtrl.text = p.phone ?? '';
+    }
+  }
+
+  Future<void> _save() async {
+    final p = CompanyProfile(
+      name: nameCtrl.text,
+      cnpj: cnpjCtrl.text,
+      phone: phoneCtrl.text,
+    );
+    await ProfileStore.saveCompanyProfile(p);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ProAccess.isProSync()) {
+      Future.microtask(() {
+        Navigator.pushNamed(context, AppRoutes.paywall);
+      });
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Perfil da empresa')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nome da empresa')),
+            TextField(controller: cnpjCtrl, decoration: const InputDecoration(labelText: 'CNPJ')),
+            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Telefone')),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _save, child: const Text('Salvar')),
+          ],
+        ),
+      ),
+    );
+  }
+}

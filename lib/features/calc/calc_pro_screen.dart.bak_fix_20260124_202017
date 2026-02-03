@@ -1,0 +1,423 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import '../../services/local_store.dart';
+import '../budgets/paywall_screen.dart';
+
+class CalcProScreen extends StatefulWidget {
+  const CalcProScreen({super.key});
+
+  @override
+  State<CalcProScreen> createState() => _CalcProScreenState();
+}
+
+class _CalcProScreenState extends State<CalcProScreen> {
+  bool _loading = true;
+  bool _isPro = false;
+
+  // entradas
+  final _powerCtrl = TextEditingController(text: '');
+  final _lenCtrl = TextEditingController(text: '');
+  int _voltage = 220; // 127/220
+  int _phases = 1; // 1 ou 3
+  double _pf = 1.0; // fator de potência
+  String _material = 'Cobre'; // Cobre/Alumínio
+  double _vdMax = 4.0; // queda máxima %
+
+  // resultado
+  String _result = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _powerCtrl.dispose();
+    _lenCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final p = await LocalStore.isPro();
+    if (!mounted) return;
+    setState(() {
+      _isPro = p;
+      _loading = false;
+    });
+
+    if (!_isPro) {
+      final ok = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PaywallScreen()),
+      );
+      if (ok == true) {
+        final p2 = await LocalStore.isPro();
+        if (!mounted) return;
+        setState(() => _isPro = p2);
+      }
+      if (!_isPro && mounted) {
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  double _parseNum(TextEditingController c) {
+    final s = c.text.trim().replaceAll(',', '.');
+    return double.tryParse(s) ?? 0.0;
+  }
+
+  // resistividade aproximada (ohm*mm²/m) a 20°C
+  double get _rho => _material == 'Cobre' ? 0.0175 : 0.0282;
+
+  // tabela simples de seções (mm²) e ampacidades base (A) "rápidas"
+  // (não é NBR completa — é uma base prática)
+  static const List<double> _sections = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50];
+  static const Map<double, double> _ampCu = {
+    1.5: 15,
+    2.5: 21,
+    4: 28,
+    6: 36,
+    10: 50,
+    16: 68,
+    25: 89,
+    35: 110,
+    50: 140
+  };
+  static const Map<double, double> _ampAl = {
+    1.5: 12,
+    2.5: 17,
+    4: 23,
+    6: 30,
+    10: 42,
+    16: 57,
+    25: 75,
+    35: 92,
+    50: 118
+  };
+
+  double _ampacity(double s) =>
+      (_material == 'Cobre' ? (_ampCu[s] ?? 0) : (_ampAl[s] ?? 0));
+
+  double _currentA(double pW) {
+    if (_phases == 3) {
+      // I = P / (sqrt(3)*V*pf)
+      return pW / (sqrt(3) * _voltage * _pf);
+    }
+    // monofásico: I = P / (V*pf)
+    return pW / (_voltage * _pf);
+  }
+
+  // queda de tensão aproximada:
+  // mono: ΔV = 2*L*I*R  (R = rho/S)
+  // tri (linha-linha): ΔV = sqrt(3)*L*I*R
+  double _vdPercent(double lenM, double iA, double sMm2) {
+    final rPerM = _rho / sMm2; // ohm/m
+    final dv =
+        _phases == 3 ? (sqrt(3) * lenM * iA * rPerM) : (2 * lenM * iA * rPerM);
+    return (dv / _voltage) * 100.0;
+  }
+
+  int _breakerFromCurrent(double iA) {
+    final standards = [
+      6,
+      10,
+      16,
+      20,
+      25,
+      32,
+      40,
+      50,
+      63,
+      70,
+      80,
+      100,
+      125,
+      160
+    ];
+    for (final b in standards) {
+      if (b >= iA * 1.25) return b; // margem
+    }
+    return standards.last;
+  }
+
+  void _calc() {
+    final p = _parseNum(_powerCtrl);
+    final len = _parseNum(_lenCtrl);
+
+    if (p <= 0 || len <= 0) {
+      setState(() => _result = 'Preenche potência (W) e distância (m).');
+      return;
+    }
+    if (_pf <= 0 || _pf > 1.0) {
+      setState(() => _result = 'Fator de potência deve ficar entre 0.1 e 1.0.');
+      return;
+    }
+
+    final i = _currentA(p);
+    double chosen = _sections.last;
+    double vd = 999;
+
+    for (final s in _sections) {
+      final amp = _ampacity(s);
+      if (amp <= 0) continue;
+      final vdS = _vdPercent(len, i, s);
+      if (amp >= i && vdS <= _vdMax) {
+        chosen = s;
+        vd = vdS;
+        break;
+      }
+      // guarda menor vd possível caso nenhum atenda
+      if (vdS < vd) {
+        vd = vdS;
+        chosen = s;
+      }
+    }
+
+    final br = _breakerFromCurrent(i);
+
+    final txt = StringBuffer()
+      ..writeln('⚡ Cálculo PRO')
+      ..writeln('Potência: ${p.toStringAsFixed(0)} W')
+      ..writeln(
+          'Tensão: $_voltage V | Fases: ${_phases == 3 ? 'Trifásico' : 'Monofásico'} | FP: ${_pf.toStringAsFixed(2)}')
+      ..writeln('Distância: ${len.toStringAsFixed(1)} m')
+      ..writeln('Material: $_material')
+      ..writeln('')
+      ..writeln('Corrente (Ib): ${i.toStringAsFixed(2)} A')
+      ..writeln(
+          'Cabo sugerido: ${chosen.toStringAsFixed(chosen % 1 == 0 ? 0 : 1)} mm²')
+      ..writeln(
+          'Queda de tensão estimada: ${vd.toStringAsFixed(2)} % (limite: ${_vdMax.toStringAsFixed(1)}%)')
+      ..writeln('Disjuntor sugerido: ${br} A')
+      ..writeln('')
+      ..writeln(
+          'Obs: base prática. Depois refinamos por método de instalação/NBR.');
+
+    setState(() => _result = txt.toString());
+  }
+
+  Widget _chip(String t, bool on, VoidCallback tap) {
+    return InkWell(
+      onTap: tap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: on ? const Color(0xFFF7C948) : const Color(0xFF1F2430),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFF2B2F3A)),
+        ),
+        child: Text(
+          t,
+          style: TextStyle(
+            color: on ? Colors.black : Colors.white70,
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = const Color(0xFF0E1117);
+    final card = const Color(0xFF141A22);
+    final border = const Color(0xFF2B2F3A);
+    final gold = const Color(0xFFF7C948);
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        elevation: 0,
+        title: const Text('Cálculo PRO'),
+      ),
+      body: SafeArea(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: border),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(_isPro ? Icons.verified : Icons.lock,
+                            color: _isPro ? Colors.greenAccent : gold),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _isPro ? 'PRO ATIVO ✅' : 'PRO necessário',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Entradas',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _powerCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            labelText: 'Potência (W)',
+                            labelStyle: TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Color(0xFF101521),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _lenCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            labelText: 'Distância (m)',
+                            labelStyle: TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Color(0xFF101521),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _chip('127V', _voltage == 127,
+                                () => setState(() => _voltage = 127)),
+                            const SizedBox(width: 10),
+                            _chip('220V', _voltage == 220,
+                                () => setState(() => _voltage = 220)),
+                            const SizedBox(width: 10),
+                            _chip('1F', _phases == 1,
+                                () => setState(() => _phases = 1)),
+                            const SizedBox(width: 10),
+                            _chip('3F', _phases == 3,
+                                () => setState(() => _phases = 3)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _material,
+                                dropdownColor: const Color(0xFF141A22),
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  labelText: 'Material',
+                                  labelStyle: TextStyle(color: Colors.white70),
+                                  filled: true,
+                                  fillColor: Color(0xFF101521),
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                      value: 'Cobre', child: Text('Cobre')),
+                                  DropdownMenuItem(
+                                      value: 'Alumínio',
+                                      child: Text('Alumínio')),
+                                ],
+                                onChanged: (v) =>
+                                    setState(() => _material = v ?? 'Cobre'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<double>(
+                                value: _vdMax,
+                                dropdownColor: const Color(0xFF141A22),
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  labelText: 'Queda máx (%)',
+                                  labelStyle: TextStyle(color: Colors.white70),
+                                  filled: true,
+                                  fillColor: Color(0xFF101521),
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                      value: 3.0, child: Text('3.0%')),
+                                  DropdownMenuItem(
+                                      value: 4.0, child: Text('4.0%')),
+                                  DropdownMenuItem(
+                                      value: 5.0, child: Text('5.0%')),
+                                ],
+                                onChanged: (v) =>
+                                    setState(() => _vdMax = v ?? 4.0),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Slider(
+                          value: _pf,
+                          min: 0.5,
+                          max: 1.0,
+                          divisions: 10,
+                          label: _pf.toStringAsFixed(2),
+                          onChanged: (v) => setState(() => _pf = v),
+                        ),
+                        Text('Fator de potência: ${_pf.toStringAsFixed(2)}',
+                            style: const TextStyle(color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    onPressed: _calc,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: gold,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('Calcular (PRO)',
+                        style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                  const SizedBox(height: 14),
+                  if (_result.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: card,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: border),
+                      ),
+                      child: SelectableText(
+                        _result,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,95 @@
+import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
+
+class TutoriaisScreen extends StatelessWidget {
+  const TutoriaisScreen({super.key});
+
+  static final _items = <_Tip>[
+    _Tip(
+      title: 'Como escolher disjuntor',
+      subtitle: 'Regra rápida + ajustes por método.',
+      body: '• Regra rápida: In ≈ Ib * 1,25 (aproximação)\n'
+          '• Nunca use disjuntor menor que a corrente do circuito (Ib).\n'
+          '• Verifique a capacidade do cabo (Iz) e a correção por temperatura/agrupamento.\n'
+          '• Em chuveiro/ar: confira pico de partida (principalmente motores).\n',
+    ),
+    _Tip(
+      title: 'Queda de tensão',
+      subtitle: 'Quando ajustar bitola pela distância.',
+      body: '• Quanto maior a distância e corrente, maior a queda.\n'
+          '• Iluminação: normalmente mira < 4% (depende do padrão adotado).\n'
+          '• Se a queda estiver alta: aumente a bitola ou reduza a distância.\n',
+    ),
+    _Tip(
+      title: 'Aterramento',
+      subtitle: 'Continuidade e condutor de proteção.',
+      body: '• Use condutor PE adequado.\n'
+          '• Garanta continuidade do PE e conexão correta ao barramento.\n'
+          '• Em tomadas: fase/neutro/terra conforme padrão.\n',
+    ),
+    _Tip(
+      title: 'DR e DPS (onde usar)',
+      subtitle: 'Proteções que evitam dor de cabeça.',
+      body: '• DR: proteção contra choque (corrente diferencial).\n'
+          '• DPS: surtos (raios/variações).\n'
+          '• DPS geralmente na entrada; DR em circuitos que exigem.\n',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Tutoriais e Dicas')),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _items.length,
+        separatorBuilder: (_, __) =>
+            const Divider(height: 24, color: Colors.white10),
+        itemBuilder: (context, i) {
+          final t = _items[i];
+          return ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            title: Text(t.title,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            subtitle:
+                Text(t.subtitle, style: const TextStyle(color: Colors.white70)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => _TipDetail(tip: t)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TipDetail extends StatelessWidget {
+  final _Tip tip;
+  const _TipDetail({required this.tip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(tip.title)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          tip.body,
+          style:
+              const TextStyle(fontSize: 16, height: 1.4, color: Colors.white70),
+        ),
+      ),
+    );
+  }
+}
+
+class _Tip {
+  final String title;
+  final String subtitle;
+  final String body;
+  const _Tip({required this.title, required this.subtitle, required this.body});
+}

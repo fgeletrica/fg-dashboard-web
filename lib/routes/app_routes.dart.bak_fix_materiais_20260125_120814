@@ -1,0 +1,29 @@
+class AppRoutes {
+  static const String home = '/';          // agora vai ser o Gate (primeiro acesso)
+  static const String homeMain = '/home';  // Home real
+
+  static const String calc = '/calculo';
+  static const String calculo = '/calculo'; // alias
+
+  static const String agenda = '/agenda';
+  static const String orcamentos = '/orcamentos';
+  static const String ferramentas = '/ferramentas';
+  static const String tutoriais = '/tutoriais';
+  static const String conta = '/conta';
+  static const String paywall = '/paywall';
+
+  static const String materiais = '/materiais';
+  static const String servicos = '/servicos';
+  static const String equipamentos = '/equipamentos';
+  static const String admin = '/admin';
+
+  static const String unitConvert = '/unit_convert';
+  static const String cabosTabela = '/cabos_tabela';
+  static const String quedaTensao = '/queda_tensao';
+  static const String clientes = '/clientes';
+  static const String deslocamento = '/deslocamento';
+
+  // extras
+  static const String parceiros = '/parceiros';
+  static const String sobre = '/sobre';
+}

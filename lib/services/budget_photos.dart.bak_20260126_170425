@@ -1,0 +1,77 @@
+import 'dart:convert';
+
+class BudgetPhoto {
+  String id; // único
+  String kind; // 'before' | 'after'
+  String b64; // base64 puro (sem data:image)
+  String label; // texto curto (ex: "ANTES" / "DEPOIS")
+  String note; // obs editável
+  int createdAtMs; // timestamp
+
+  BudgetPhoto({
+    required this.id,
+    required this.kind,
+    required this.b64,
+    required this.label,
+    required this.note,
+    required this.createdAtMs,
+  });
+
+  List<int> bytes() => base64Decode(b64);
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'b64': b64,
+        'label': label,
+        'note': note,
+        'createdAtMs': createdAtMs,
+      };
+
+  static BudgetPhoto fromJson(Map<String, dynamic> j) => BudgetPhoto(
+        id: (j['id'] ?? '').toString(),
+        kind: (j['kind'] ?? 'before').toString(),
+        b64: (j['b64'] ?? '').toString(),
+        label: (j['label'] ?? '').toString(),
+        note: (j['note'] ?? '').toString(),
+        createdAtMs: (j['createdAtMs'] is num)
+            ? (j['createdAtMs'] as num).toInt()
+            : int.tryParse((j['createdAtMs'] ?? '').toString()) ?? 0,
+      );
+}
+
+/// Codec tolerante: aceita List, Map, String(JSON), ou null.
+class BudgetPhotosCodec {
+  static List<BudgetPhoto> decode(dynamic v) {
+    if (v == null) return <BudgetPhoto>[];
+
+    try {
+      if (v is String) {
+        final s = v.trim();
+        if (s.isEmpty) return <BudgetPhoto>[];
+        final parsed = jsonDecode(s);
+        return decode(parsed);
+      }
+
+      if (v is List) {
+        return v
+            .where((e) => e != null)
+            .map(
+                (e) => BudgetPhoto.fromJson((e as Map).cast<String, dynamic>()))
+            .where((p) => p.b64.trim().isNotEmpty)
+            .toList();
+      }
+
+      if (v is Map) {
+        final m = v.cast<String, dynamic>();
+        if (m['items'] is List) return decode(m['items']);
+      }
+    } catch (_) {}
+
+    return <BudgetPhoto>[];
+  }
+
+  static dynamic encode(List<BudgetPhoto> photos) {
+    return photos.map((p) => p.toJson()).toList();
+  }
+}

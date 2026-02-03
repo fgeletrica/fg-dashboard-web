@@ -1,0 +1,276 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import '../models/calc_to_budget.dart';
+import 'budgets_screen.dart';
+
+class CalcScreen extends StatefulWidget {
+  const CalcScreen({super.key});
+
+  @override
+  State<CalcScreen> createState() => _CalcScreenState();
+}
+
+class _CalcScreenState extends State<CalcScreen> {
+  final clientCtrl = TextEditingController(text: 'Cliente');
+  final powerCtrl = TextEditingController(text: '5500');
+  final distCtrl = TextEditingController(text: '15');
+  int voltage = 220;
+
+  double? ib;
+  double? cableMm2;
+  int? breakerA;
+  double? vdropPct;
+
+  // tabela conservadora (cobre) - evita exagero
+  final Map<double, double> ampCu = {
+    1.5: 19,
+    2.5: 26,
+    4.0: 34,
+    6.0: 44,
+    10.0: 61,
+    16.0: 82,
+    25.0: 108,
+  };
+
+  final List<int> breakers = const [
+    10,
+    16,
+    20,
+    25,
+    32,
+    40,
+    50,
+    63,
+    70,
+    80,
+    100,
+    125
+  ];
+
+  double _toD(String s) =>
+      double.tryParse(s.replaceAll(',', '.').trim()) ?? 0.0;
+
+  double _vdropPct(double i, double l, double s, int v) {
+    const rho = 0.0175; // cobre (ohm*mm²/m)
+    final dv = (2 * rho * l * i) / s; // monofásico ida e volta
+    return (dv / v) * 100.0;
+  }
+
+  int _pickBreaker(double i, double imax) {
+    for (final b in breakers) {
+      if (b >= i && b <= imax) return b;
+    }
+    return breakers.last;
+  }
+
+  void _calc() {
+    final p = _toD(powerCtrl.text);
+    final l = _toD(distCtrl.text);
+
+    if (p <= 0 || l <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Preencha potência e distância.')));
+      return;
+    }
+
+    final i = p / voltage;
+
+    double? chosenS;
+    int? chosenB;
+    double? chosenVD;
+
+    // 1) tenta atender queda <= 4% E ampacidade
+    for (final s in ampCu.keys) {
+      final imax = ampCu[s]!;
+      if (imax < i) continue;
+
+      final vd = _vdropPct(i, l, s, voltage);
+      if (vd <= 4.0) {
+        chosenS = s;
+        chosenVD = vd;
+        chosenB = _pickBreaker(i, imax);
+        break;
+      }
+    }
+
+    // 2) fallback: só ampacidade
+    if (chosenS == null) {
+      for (final s in ampCu.keys) {
+        final imax = ampCu[s]!;
+        if (imax >= i) {
+          chosenS = s;
+          chosenVD = _vdropPct(i, l, s, voltage);
+          chosenB = _pickBreaker(i, imax);
+          break;
+        }
+      }
+    }
+
+    setState(() {
+      ib = double.parse(i.toStringAsFixed(2));
+      cableMm2 = chosenS ?? ampCu.keys.last;
+      breakerA = chosenB ?? breakers.last;
+      vdropPct = double.parse((chosenVD ?? 0).toStringAsFixed(2));
+    });
+  }
+
+  void _goBudget() {
+    if (ib == null ||
+        cableMm2 == null ||
+        breakerA == null ||
+        vdropPct == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Faça o cálculo primeiro.')));
+      return;
+    }
+
+    final payload = CalcToBudget(
+      client:
+          clientCtrl.text.trim().isEmpty ? 'Cliente' : clientCtrl.text.trim(),
+      powerW: _toD(powerCtrl.text),
+      voltage: voltage,
+      distanceM: _toD(distCtrl.text),
+      ib: ib!,
+      cableMm2: cableMm2!,
+      breakerA: breakerA!,
+      vdropPct: vdropPct!,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BudgetsScreen(fromCalc: payload)),
+    );
+  }
+
+  @override
+  void dispose() {
+    clientCtrl.dispose();
+    powerCtrl.dispose();
+    distCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget _row(String a, String b) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+              child: Text(a, style: const TextStyle(color: Colors.white70))),
+          Text(b, style: const TextStyle(fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Cálculo'), leading: const BackButton()),
+      body: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131C2B),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Entrada',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                TextField(
+                    controller: clientCtrl,
+                    decoration: const InputDecoration(labelText: 'Cliente')),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: powerCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Potência (W)'),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: voltage,
+                        decoration: const InputDecoration(labelText: 'Tensão'),
+                        items: const [
+                          DropdownMenuItem(value: 127, child: Text('127 V')),
+                          DropdownMenuItem(value: 220, child: Text('220 V')),
+                        ],
+                        onChanged: (v) => setState(() => voltage = v ?? 220),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: distCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration:
+                            const InputDecoration(labelText: 'Distância (m)'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                      onPressed: _calc, child: const Text('Calcular')),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131C2B),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Resultado',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                _row('Corrente (Ib)',
+                    ib == null ? '—' : '${ib!.toStringAsFixed(2)} A'),
+                _row(
+                    'Cabo sugerido',
+                    cableMm2 == null
+                        ? '—'
+                        : '${cableMm2!.toStringAsFixed(1)} mm²'),
+                _row('Disjuntor', breakerA == null ? '—' : '$breakerA A'),
+                _row(
+                    'Queda de tensão',
+                    vdropPct == null
+                        ? '—'
+                        : '${vdropPct!.toStringAsFixed(2)} %'),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _goBudget,
+                    child: const Text('Gerar orçamento a partir do cálculo'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- EXTRA: pré-preencher pelo equipamento selecionado (PRO) ---
+// --- EXTRA: pré-preencher pelo equipamento selecionado (PRO) ---

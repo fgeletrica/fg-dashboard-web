@@ -1,0 +1,632 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../services/pro_access.dart';
+
+class AdminScreen extends StatefulWidget {
+  const AdminScreen({super.key});
+
+  @override
+  State<AdminScreen> createState() => _AdminScreenState();
+}
+
+class _AdminScreenState extends State<AdminScreen> {
+  // visual
+  final bg = const Color(0xFF0E1117);
+  final card = const Color(0xFF141A22);
+  final border = const Color(0xFF2B2F3A);
+  final gold = const Color(0xFFF7C948);
+
+  // auth
+  static const _kAdminPass = 'admin_pass_v1'; // string
+  static const _kAdminAuthed = 'admin_authed_v1'; // bool
+  final _passCtrl = TextEditingController();
+  bool _authed = false;
+  bool _loadingAuth = true;
+
+  // cupom
+  static const _kCupomEnabled = 'cupom_enabled_v1';
+  static const _kCupomCode = 'cupom_code_v1';
+  static const _kCupomPct = 'cupom_pct_v1'; // double string
+  final _cupomCodeCtrl = TextEditingController();
+  final _cupomPctCtrl = TextEditingController(text: '0');
+
+  bool _cupomEnabled = false;
+
+  // links / branding
+  static const _kWhats = 'brand_whats_v1';
+  static const _kInsta = 'brand_insta_v1';
+  static const _kFace = 'brand_face_v1';
+  final _whatsCtrl = TextEditingController(text: '5521997901083');
+  final _instaCtrl = TextEditingController(text: 'fg_eletrica_ofc');
+  final _faceCtrl = TextEditingController(text: 'https://www.facebook.com/share/1CSZ3681VC/');
+
+  // flags simples
+  static const _kForceWatermark = 'flag_force_watermark_v1'; // bool
+  static const _kRequireSign = 'flag_require_sign_v1'; // bool
+  bool _forceWatermark = false;
+  bool _requireSign = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAuth();
+    _loadAdminExtras();
+  }
+
+  @override
+  void dispose() {
+    _passCtrl.dispose();
+    _cupomCodeCtrl.dispose();
+    _cupomPctCtrl.dispose();
+    _whatsCtrl.dispose();
+    _instaCtrl.dispose();
+    _faceCtrl.dispose();
+    super.dispose();
+  }
+
+  double _toDouble(String s, double fallback) =>
+      double.tryParse(s.trim().replaceAll(',', '.')) ?? fallback;
+
+  Future<void> _loadAuth() async {
+    final sp = await SharedPreferences.getInstance();
+    final savedPass = sp.getString(_kAdminPass);
+    // senha padrão: 1234 (se nunca setou)
+    if (savedPass == null || savedPass.trim().isEmpty) {
+      await sp.setString(_kAdminPass, '1234');
+    }
+    final ok = sp.getBool(_kAdminAuthed) ?? false;
+    if (!mounted) return;
+    setState(() {
+      _authed = ok;
+      _loadingAuth = false;
+    });
+  }
+
+  Future<void> _login() async {
+    final sp = await SharedPreferences.getInstance();
+    final savedPass = (sp.getString(_kAdminPass) ?? '1234').trim();
+    final typed = _passCtrl.text.trim();
+    if (typed == savedPass) {
+      await sp.setBool(_kAdminAuthed, true);
+      if (!mounted) return;
+      setState(() => _authed = true);
+      _snack("Admin liberado ✅");
+    } else {
+      _snack("Senha incorreta ❌");
+    }
+  }
+
+  Future<void> _logout() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kAdminAuthed, false);
+    if (!mounted) return;
+    setState(() => _authed = false);
+    _snack("Saiu do Admin.");
+  }
+
+  Future<void> _setPassword(String newPass) async {
+    final sp = await SharedPreferences.getInstance();
+    final v = newPass.trim();
+    if (v.length < 4) {
+      _snack("Senha muito curta (mín 4).");
+      return;
+    }
+    await sp.setString(_kAdminPass, v);
+    _snack("Senha alterada ✅");
+  }
+
+  Future<void> _resetPassword1234() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_kAdminPass, '1234');
+    _snack("Senha resetada para 1234 ✅");
+  }
+
+  Future<void> _loadAdminExtras() async {
+    final sp = await SharedPreferences.getInstance();
+
+    _cupomEnabled = sp.getBool(_kCupomEnabled) ?? false;
+    _cupomCodeCtrl.text = sp.getString(_kCupomCode) ?? "FG10";
+    _cupomPctCtrl.text = sp.getString(_kCupomPct) ?? "10";
+
+    _whatsCtrl.text = sp.getString(_kWhats) ?? "5521997901083";
+    _instaCtrl.text = sp.getString(_kInsta) ?? "fg_eletrica_ofc";
+    _faceCtrl.text = sp.getString(_kFace) ?? "https://www.facebook.com/share/1CSZ3681VC/";
+
+    _forceWatermark = sp.getBool(_kForceWatermark) ?? false;
+    _requireSign = sp.getBool(_kRequireSign) ?? false;
+
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _saveCupom() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kCupomEnabled, _cupomEnabled);
+    await sp.setString(_kCupomCode, _cupomCodeCtrl.text.trim());
+    await sp.setString(_kCupomPct, _cupomPctCtrl.text.trim());
+    _snack("Cupom salvo ✅");
+  }
+
+  Future<void> _saveLinks() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_kWhats, _whatsCtrl.text.trim());
+    await sp.setString(_kInsta, _instaCtrl.text.trim());
+    await sp.setString(_kFace, _faceCtrl.text.trim());
+    _snack("Links salvos ✅");
+  }
+
+  Future<void> _saveFlags() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kForceWatermark, _forceWatermark);
+    await sp.setBool(_kRequireSign, _requireSign);
+    _snack("Configurações salvas ✅");
+  }
+
+  Future<_AdminStatus> _load() async {
+    final proDev = await ProAccess.getProDev();
+    final until = await ProAccess.getTrialUntilMs();
+    final left = await ProAccess.trialRemaining();
+    final has = await ProAccess.hasProAccessNow();
+    return _AdminStatus(
+      proDev: proDev,
+      trialUntilMs: until,
+      trialRemaining: left,
+      hasAccessNow: has,
+    );
+  }
+
+  String _fmtDate(int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Widget _cardBox({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _btn({
+    required String label,
+    required Future<void> Function() onTap,
+    bool danger = false,
+  }) {
+    return Expanded(
+      child: ElevatedButton(
+        onPressed: () async {
+          try {
+            await onTap();
+            if (!mounted) return;
+            setState(() {});
+          } catch (e) {
+            _snack('Erro: $e');
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: danger ? const Color(0xFFB00020) : gold,
+          foregroundColor: danger ? Colors.white : Colors.black,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        child: Text(label, textAlign: TextAlign.center),
+      ),
+    );
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFF0E1117),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loadingAuth) {
+      return Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(backgroundColor: bg, elevation: 0, title: const Text("Admin")),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_authed) {
+      return Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(
+          backgroundColor: bg,
+          elevation: 0,
+          title: const Text('Admin (senha)'),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _cardBox(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Digite a senha do Admin",
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                  const SizedBox(height: 8),
+                  Text("Senha padrão: 1234",
+                      style: TextStyle(color: Colors.white.withOpacity(.7), fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _passCtrl,
+                    obscureText: true,
+                    decoration: _dec("Senha"),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: gold,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _login,
+                      child: const Text("Entrar", style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Authed
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        elevation: 0,
+        title: const Text('Admin (oculto)'),
+        actions: [
+          IconButton(
+            tooltip: "Sair",
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
+          )
+        ],
+      ),
+      body: FutureBuilder<_AdminStatus>(
+        future: _load(),
+        builder: (context, snap) {
+          final s = snap.data;
+          final loading = !snap.hasData;
+
+          final proTxt = loading ? '...' : (s!.proDev ? 'SIM' : 'NÃO');
+          final hasTxt = loading ? '...' : (s!.hasAccessNow ? 'SIM' : 'NÃO');
+
+          final untilTxt = loading
+              ? '...'
+              : (s!.trialUntilMs == null ? '—' : _fmtDate(s.trialUntilMs!));
+
+          final leftTxt = loading ? '...' : ProAccess.formatDuration(s!.trialRemaining);
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // PRO/TRIAL
+              _cardBox(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('PRO / Trial (tempo real)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                    const SizedBox(height: 10),
+                    Text('PRO (DEV): $proTxt', style: const TextStyle(color: Colors.white70)),
+                    Text('Acesso agora: $hasTxt', style: const TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 10),
+                    Text('TrialUntil: $untilTxt', style: const TextStyle(color: Colors.white70)),
+                    Text('Restante: $leftTxt', style: const TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        _btn(
+                          label: 'Ativar PRO (DEV)',
+                          onTap: () async {
+                            await ProAccess.setProDev(true);
+                            _snack('PRO (DEV) ativado');
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _btn(
+                          label: 'Desativar PRO (DEV)',
+                          danger: true,
+                          onTap: () async {
+                            await ProAccess.setProDev(false);
+                            _snack('PRO (DEV) desativado');
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _btn(
+                          label: 'Iniciar trial (7d)',
+                          onTap: () async {
+                            await ProAccess.startTrial(duration: const Duration(days: 7));
+                            _snack('Trial iniciado por 7 dias');
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _btn(
+                          label: '+1 dia',
+                          onTap: () async {
+                            await ProAccess.extendTrial(const Duration(days: 1));
+                            _snack('Trial +1 dia');
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _btn(
+                          label: '+7 dias',
+                          onTap: () async {
+                            await ProAccess.extendTrial(const Duration(days: 7));
+                            _snack('Trial +7 dias');
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _btn(
+                          label: 'Expirar agora',
+                          danger: true,
+                          onTap: () async {
+                            await ProAccess.expireTrialNow();
+                            _snack('Trial expirado');
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _btn(
+                          label: 'Reset Trial',
+                          danger: true,
+                          onTap: () async {
+                            await ProAccess.resetTrial();
+                            _snack('Trial resetado (sem data)');
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => setState(() {}),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(color: border),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: const Text('Atualizar status'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // CUPOM
+              _cardBox(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Cupom / Promoção',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                    const SizedBox(height: 10),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _cupomEnabled,
+                      onChanged: (v) => setState(() => _cupomEnabled = v),
+                      title: const Text("Ativar cupom", style: TextStyle(color: Colors.white)),
+                      subtitle: const Text("Ex.: cupom pra divulgação", style: TextStyle(color: Colors.white70)),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _cupomCodeCtrl,
+                      decoration: _dec("Código do cupom (ex: FG10)"),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _cupomPctCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: _dec("Desconto (%) — ex: 10"),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: gold,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: _saveCupom,
+                        child: const Text("Salvar cupom", style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Dica: Depois eu conecto isso no Paywall pra aplicar o desconto.",
+                      style: TextStyle(color: Colors.white.withOpacity(.7)),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // LINKS
+              _cardBox(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Links do app (Fale Conosco / Sobre)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _whatsCtrl,
+                      decoration: _dec("WhatsApp (somente números) — ex: 5521997901083"),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _instaCtrl,
+                      decoration: _dec("Instagram (arroba sem @) — ex: fg_eletrica_ofc"),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _faceCtrl,
+                      decoration: _dec("Facebook URL"),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: gold,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: _saveLinks,
+                        child: const Text("Salvar links", style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // FLAGS
+              _cardBox(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Configurações avançadas (flags)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                    const SizedBox(height: 10),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _forceWatermark,
+                      onChanged: (v) => setState(() => _forceWatermark = v),
+                      title: const Text("Forçar marca d'água no PDF", style: TextStyle(color: Colors.white)),
+                      subtitle: const Text("Mesmo para PRO (teste / segurança)", style: TextStyle(color: Colors.white70)),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _requireSign,
+                      onChanged: (v) => setState(() => _requireSign = v),
+                      title: const Text("Exigir assinatura para gerar PDF", style: TextStyle(color: Colors.white)),
+                      subtitle: const Text("Se desligar, assinatura fica opcional", style: TextStyle(color: Colors.white70)),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: gold,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: _saveFlags,
+                        child: const Text("Salvar flags", style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Dica: eu consigo ligar essas flags nas telas (PDF, paywall, etc.) pra você testar rápido.",
+                      style: TextStyle(color: Colors.white.withOpacity(.7)),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // SENHA
+              _cardBox(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Senha do Admin',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                    const SizedBox(height: 10),
+                    TextField(
+                      obscureText: true,
+                      decoration: _dec("Nova senha (mín 4)"),
+                      onSubmitted: (v) => _setPassword(v),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _btn(
+                          label: "Resetar p/ 1234",
+                          danger: true,
+                          onTap: _resetPassword1234,
+                        ),
+                        const SizedBox(width: 10),
+                        _btn(
+                          label: "Salvar nova senha",
+                          onTap: () async {
+                            // pega o último valor digitado no campo (o onSubmitted já salva,
+                            // mas aqui é um botão extra)
+                            _snack("Dica: digite a senha e aperte Enter ✅");
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text("Se esquecer: resetar para 1234 aqui.",
+                        style: TextStyle(color: Colors.white.withOpacity(.7))),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AdminStatus {
+  final bool proDev;
+  final int? trialUntilMs;
+  final Duration trialRemaining;
+  final bool hasAccessNow;
+
+  _AdminStatus({
+    required this.proDev,
+    required this.trialUntilMs,
+    required this.trialRemaining,
+    required this.hasAccessNow,
+  });
+}

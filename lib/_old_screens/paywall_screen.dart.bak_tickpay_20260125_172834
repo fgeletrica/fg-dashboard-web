@@ -1,0 +1,316 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../routes/app_routes.dart';
+import '../core/app_theme.dart';
+import '../services/pro_access.dart';
+
+class PaywallScreen extends StatefulWidget {
+  const PaywallScreen({super.key});
+
+  @override
+  State<PaywallScreen> createState() => _PaywallScreenState();
+}
+
+class _PaywallScreenState extends State<PaywallScreen> {
+
+  // ---- CUPOM (mesmo da Home) ----
+  bool _cupomEnabled = false;
+  String _cupomCode = '';
+  String _cupomPct = '';
+  int? _cupomEndAtMs;
+  Timer? _cupomTicker;
+
+  Future<void> _loadCupom() async {
+    final sp = await SharedPreferences.getInstance();
+    final enabled = sp.getBool('cupom_enabled_v1') ?? false;
+    final code = (sp.getString('cupom_code_v1') ?? '').trim();
+    final pct  = (sp.getString('cupom_pct_v1') ?? '').trim();
+    final endAtMs = sp.getInt('cupom_endat_ms_v1');
+
+    // auto-desativa se expirou
+    if (endAtMs != null && DateTime.now().millisecondsSinceEpoch > endAtMs) {
+      await sp.setBool('cupom_enabled_v1', false);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _cupomEndAtMs = endAtMs;
+      _cupomEnabled = enabled || (endAtMs != null);
+      _cupomCode = code;
+      _cupomPct = pct;
+    });
+
+    _startCupomTicker();
+  }
+
+  void _startCupomTicker() {
+    _cupomTicker?.cancel();
+    if (_cupomEndAtMs == null) return;
+    _cupomTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final end = _cupomEndAtMs;
+      if (end == null) return;
+      final left = end - DateTime.now().millisecondsSinceEpoch;
+      if (left <= 0) {
+        _cupomTicker?.cancel();
+        setState(() {
+          _cupomEndAtMs = null;
+          _cupomEnabled = false;
+        });
+        return;
+      }
+      setState(() {}); // só pra atualizar o texto
+    });
+  }
+
+  String _fmtLeft(int ms) {
+    if (ms <= 0) return "0s";
+    final s = (ms / 1000).floor();
+    final d = s ~/ 86400;
+    final h = (s % 86400) ~/ 3600;
+    final mnt = (s % 3600) ~/ 60;
+    final sec = s % 60;
+
+    if (d > 0) return "${d}d ${h}h ${mnt}m";
+    if (h > 0) return "${h}h ${mnt}m ${sec}s";
+    if (mnt > 0) return "${mnt}m ${sec}s";
+    return "${sec}s";
+  }
+
+  String _cupomPaywallText() {
+    final code = _cupomCode.trim();
+    if (!_cupomEnabled || code.isEmpty) return "";
+    final pctTxt = _cupomPct.isNotEmpty ? " (${_cupomPct}%)" : "";
+    final end = _cupomEndAtMs;
+    if (end == null) return "Cupom $code$pctTxt";
+    final left = end - DateTime.now().millisecondsSinceEpoch;
+    return "Cupom $code$pctTxt — expira em ${_fmtLeft(left)}";
+  }
+
+
+  bool loading = true;
+  bool hasPro = false;
+  Duration left = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCupom();
+_load();
+  }
+
+  Future<void> _load() async {
+    setState(() => loading = true);
+    hasPro = await ProAccess.hasProAccessNow();
+    left = await ProAccess.trialRemaining();
+    setState(() => loading = false);
+  }
+
+  void _soon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pagamento real: em breve ✅')),
+    );
+  }
+
+  @override
+  
+  @override
+  void dispose() {
+    _cupomTicker?.cancel();
+    super.dispose();
+  }
+
+Widget build(BuildContext context) {
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      appBar: AppBar(
+        backgroundColor: AppTheme.bg,
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset('assets/logo.png', width: 26, height: 26, fit: BoxFit.cover),
+            ),
+            const SizedBox(width: 10),
+            const Text('Escolher Plano'),
+          ],
+        ),
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Cupom / Promoção:',
+                          style: TextStyle(color: Colors.white.withOpacity(.85), fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      Text(
+                        (_cupomPaywallText().trim().isNotEmpty)
+                            ? _cupomPaywallText()
+                            : ProAccess.formatDuration(left),
+                        style: TextStyle(color: AppTheme.gold, fontWeight: FontWeight.w900, fontSize: 18),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _planBox(
+                              title: 'PLANO MENSAL',
+                              priceBig: 'R\$ 9,90',
+                              sub: 'por mês',
+                              btn: 'Assinar Plano',
+                              highlight: false,
+                              onTap: _soon,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _planBox(
+                              title: 'OFERTA ANUAL',
+                              priceBig: 'R\$ 79,90',
+                              sub: 'por ano',
+                              btn: 'Resgatar Oferta',
+                              highlight: true,
+                              onTap: _soon,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          'Comparar Plano Grátis x PRO',
+                          style: TextStyle(color: AppTheme.gold, fontWeight: FontWeight.w900),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                Text(
+                  'Garanta já o seu plano para ter acesso PRO ao FG Elétrica!',
+                  style: TextStyle(color: Colors.white.withOpacity(.9), fontSize: 16, fontWeight: FontWeight.w900),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 14),
+
+                _card(
+                  child: Column(
+                    children: [
+                      Text('PLANO MENSAL', style: TextStyle(color: AppTheme.gold, fontWeight: FontWeight.w900, fontSize: 22)),
+                      const SizedBox(height: 10),
+                      Text('Por apenas R\$ 9,90', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 20)),
+                      const SizedBox(height: 10),
+                      Text('Plano Mensal PRO FG Elétrica', style: TextStyle(color: Colors.white.withOpacity(.85), fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _soon,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.card,
+                            foregroundColor: AppTheme.gold,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: const Text('ASSINAR PLANO', style: TextStyle(fontWeight: FontWeight.w900)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _soon,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2AAE5A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: const Text('Inserir Cupom de Desconto', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                _card(
+                  child: Text(
+                    hasPro ? 'Status: PRO ativo ✅' : 'Status: FREE',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+    );
+  
+        // ✅ vai pra Home após aplicar cupom
+        if (!mounted) return const SizedBox.shrink();
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        Navigator.of(context).pushReplacementNamed(AppRoutes.homeMain);
+}
+
+  Widget _planBox({
+    required String title,
+    required String priceBig,
+    required String sub,
+    required String btn,
+    required bool highlight,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: highlight ? AppTheme.gold : Colors.white.withOpacity(.10), width: 2),
+        boxShadow: const [BoxShadow(blurRadius: 18, offset: Offset(0, 10), color: Color(0x22000000))],
+      ),
+      child: Column(
+        children: [
+          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(priceBig, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+          Text(sub, style: TextStyle(color: Colors.white.withOpacity(.75))),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: highlight ? AppTheme.gold : Colors.white,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Text(btn, style: const TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border.withOpacity(.35)),
+      ),
+      child: child,
+    );
+  }
+}

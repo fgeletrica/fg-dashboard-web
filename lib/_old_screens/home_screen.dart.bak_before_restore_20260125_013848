@@ -1,0 +1,76 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/app_theme.dart';
+import '../routes/app_routes.dart';
+import '../widgets/pro_trial_countdown.dart';
+import '../services/profile_store.dart';
+import 'about_screen.dart';
+import 'parceiros_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Timer? _cupomTimer;
+  Timer? _cupomTicker;
+  int? _cupomEndAtMs;
+
+  bool _cupomEnabled = false;
+  String _cupomCode = '';
+  String _cupomPct = '';
+static const String _kCupomEndAtMs = 'cupom_endat_ms_v1';
+  int? _cupomEndAt;
+
+  String _cupomUntil = '';
+
+
+  Timer? _adminHold;
+
+  String _company = 'FG Elétrica';
+  String _name = '';
+
+  static const _kSeenHomeTutorial = 'seen_home_tutorial_v1';
+  static const _kHomeNotice = 'home_notice_v1';
+
+  String _homeNotice = '';
+
+
+  Future<void> _loadCupom() async {
+    final sp = await SharedPreferences.getInstance();
+
+    var enabled = sp.getBool('cupom_enabled_v1') ?? false;
+    final code = (sp.getString('cupom_code_v1') ?? '').trim();
+    final pct  = (sp.getString('cupom_pct_v1') ?? '').trim();
+    int? endAtMs = sp.getInt('cupom_endat_ms_v1');
+
+    // Se tiver expiração e já passou, desativa de verdade
+    if (endAtMs != null && DateTime.now().millisecondsSinceEpoch > endAtMs) {
+      enabled = false;
+      await sp.setBool('cupom_enabled_v1', false);
+      await sp.remove('cupom_endat_ms_v1');
+      endAtMs = null;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      // considera ativo se enabled OU se tem endAt (pra não “sumir” o banner quando setou expiração)
+      _cupomEnabled = enabled || (endAtMs != null);
+      _cupomCode = code;
+      _cupomPct = pct;
+      _cupomEndAtMs = endAtMs;
+    });
+
+    // ticker só faz sentido se tiver endAt definido
+    if (_cupomEnabled && _cupomCode.isNotEmpty && _cupomEndAtMs != null) {
+      _startCupomTicker();
+    } else {
+      _cupomTicker?.cancel();
+    }
+  }

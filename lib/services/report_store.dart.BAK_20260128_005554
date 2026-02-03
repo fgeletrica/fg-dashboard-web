@@ -1,0 +1,36 @@
+import '../models/report_models.dart';
+import 'local_store.dart';
+
+class ReportStore {
+  static const _key = 'reports_v1';
+
+  static Future<List<TechnicalReportDoc>> loadReports() async {
+    final list = (await LocalStore.get(_key)) ?? [];
+    return list
+        .whereType<Map>()
+        .map((m) => TechnicalReportDoc.fromMap(Map<String, dynamic>.from(m)))
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt))) ?? [];
+  }
+
+  static Future<void> saveReports(List<TechnicalReportDoc> items) async {
+    await LocalStore.set(_key, items)) ?? [];
+  }
+
+  static Future<void> upsert(TechnicalReportDoc doc) async {
+    final items = await loadReports()) ?? [];
+    final idx = items.indexWhere((e) => e.id == doc.id)) ?? [];
+    if (idx >= 0) {
+      items[idx] = doc;
+    } else {
+      items.insert(0, doc)) ?? [];
+    }
+    await saveReports(items)) ?? [];
+  }
+
+  static Future<void> remove(String id) async {
+    final items = await loadReports()) ?? [];
+    items.removeWhere((e) => e.id == id)) ?? [];
+    await saveReports(items)) ?? [];
+  }
+}

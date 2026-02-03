@@ -1,0 +1,37 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PdfLimits {
+  static const int freeMonthlyLimit = 3;
+
+  static String _monthKey() {
+    final now = DateTime.now();
+    final mm = now.month.toString().padLeft(2, '0');
+    return '${now.year}-$mm';
+  }
+
+  static Future<int> freePdfsUsedThisMonth() async {
+    final sp = await SharedPreferences.getInstance();
+    final key = 'free_pdf_used_${_monthKey()}';
+    return sp.getInt(key) ?? 0;
+  }
+
+  static Future<int> freePdfsRemainingThisMonth() async {
+    final used = await freePdfsUsedThisMonth();
+    final left = freeMonthlyLimit - used;
+    return left < 0 ? 0 : left;
+  }
+
+  static Future<bool> canGeneratePdf({required bool hasPro}) async {
+    if (hasPro) return true;
+    final left = await freePdfsRemainingThisMonth();
+    return left > 0;
+  }
+
+  static Future<void> registerPdfGenerated({required bool hasPro}) async {
+    if (hasPro) return;
+    final sp = await SharedPreferences.getInstance();
+    final key = 'free_pdf_used_${_monthKey()}';
+    final used = sp.getInt(key) ?? 0;
+    await sp.setInt(key, used + 1);
+  }
+}

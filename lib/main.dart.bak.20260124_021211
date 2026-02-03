@@ -1,0 +1,46 @@
+import 'package:meu_ajudante_fg/screens/validate_document_screen.dart';
+import 'package:flutter/material.dart';
+
+import 'routes/app_pages.dart';
+
+// telas
+import 'screens/home_screen.dart';
+import 'screens/agenda_screen.dart';
+import 'screens/calc_screen.dart';
+import 'screens/orcamentos_screen.dart';
+import 'screens/tools_screen.dart';
+import 'screens/tips_screen.dart';
+import 'screens/account_screen.dart';
+import 'screens/paywall_screen.dart';
+
+void main() {
+  runApp(const MeuAjudanteApp());
+}
+
+class MeuAjudanteApp extends StatelessWidget {
+  const MeuAjudanteApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Meu Ajudante',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0E141E),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0E141E),
+          foregroundColor: Colors.white,
+        ),
+      ),
+      initialRoute: AppRoutes.home,
+      routes: {
+        AppRoutes.home: (_) => const HomeScreen(),
+        AppRoutes.calc: (_) => const CalcScreen(),
+        AppRoutes.orcamentos: (_) => OrcamentosScreen(),
+        AppRoutes.conta: (_) => AccountScreen(),
+        AppRoutes.paywall: (_) => PaywallScreen(),
+      },
+    );
+  }
+}

@@ -1,0 +1,168 @@
+import 'dart:convert';
+
+class BudgetItem {
+  String name;
+  double qty;
+  String unit;
+  double unitPrice;
+
+  BudgetItem({
+    required this.name,
+    required this.qty,
+    required this.unit,
+    required this.unitPrice,
+  });
+
+  double get total => qty * unitPrice;
+
+  Map<String, dynamic> toJson() => {
+        "name": name,
+        "qty": qty,
+        "unit": unit,
+        "unitPrice": unitPrice,
+      };
+
+  static BudgetItem fromJson(Map<String, dynamic> j) => BudgetItem(
+        name: (j["name"] ?? "").toString(),
+        qty: (j["qty"] ?? 0).toDouble(),
+        unit: (j["unit"] ?? "un").toString(),
+        unitPrice: (j["unitPrice"] ?? 0).toDouble(),
+      );
+}
+
+class BudgetServiceLine {
+  final String? packageName;
+  String name;
+  double price;
+
+  BudgetServiceLine(
+      {required this.name, required this.price, this.packageName});
+
+  Map<String, dynamic> toJson() => {"name": name, "price": price};
+
+  static BudgetServiceLine fromJson(Map<String, dynamic> j) =>
+      BudgetServiceLine(
+        name: (j["name"] ?? "").toString(),
+        price: (j["price"] ?? 0).toDouble(),
+      );
+}
+
+class BudgetDoc {
+  String id;
+  String clientName;
+  DateTime createdAt;
+
+  // origem do cálculo (opcional)
+  String? originTitle;
+  double? originPowerW;
+  int? originVoltage;
+  double? originDistanceM;
+
+  // assinatura (imagem png em bytes base64)
+  String? signatureB64;
+
+  // margem
+  bool marginPercent;
+  double marginValue;
+
+  // itens
+  List<BudgetItem> materials;
+  List<BudgetServiceLine> services;
+  BudgetDoc({
+    required this.id,
+    required this.clientName,
+    required this.createdAt,
+    required this.materials,
+    required this.services,
+    required this.marginPercent,
+    required this.marginValue,
+    this.originTitle,
+    this.originPowerW,
+    this.originVoltage,
+    this.originDistanceM,
+    this.signatureB64,
+  });
+
+  /// Cria um orçamento vazio, já com id/createdAt.
+  static BudgetDoc newDoc({
+    String clientName = '',
+    String? originTitle,
+    double? originPowerW,
+    int? originVoltage,
+    double? originDistanceM,
+  }) {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    return BudgetDoc(
+      id: id,
+      clientName: clientName,
+      createdAt: DateTime.now(),
+      materials: [],
+      services: [],
+      marginPercent: true,
+      marginValue: 0,
+      originTitle: originTitle,
+      originPowerW: originPowerW,
+      originVoltage: originVoltage,
+      originDistanceM: originDistanceM,
+      signatureB64: null,
+    );
+  }
+
+  double get subtotalMaterials => materials.fold(0.0, (a, b) => a + b.total);
+  double get subtotalServices => services.fold(0.0, (a, b) => a + b.price);
+  double get subtotal => subtotalMaterials + subtotalServices;
+
+  double get marginAmount {
+    if (subtotal <= 0) return 0;
+    return marginPercent ? subtotal * (marginValue / 100.0) : marginValue;
+  }
+
+  double get total => subtotal + marginAmount;
+
+  Map<String, dynamic> toJson() => {
+        "id": id,
+        "clientName": clientName,
+        "createdAt": createdAt.toIso8601String(),
+        "originTitle": originTitle,
+        "originPowerW": originPowerW,
+        "originVoltage": originVoltage,
+        "originDistanceM": originDistanceM,
+        "signatureB64": signatureB64,
+        "marginPercent": marginPercent,
+        "marginValue": marginValue,
+        "materials": materials.map((e) => e.toJson()).toList(),
+        "services": services.map((e) => e.toJson()).toList(),
+      };
+
+  static BudgetDoc fromJson(Map<String, dynamic> j) => BudgetDoc(
+        id: (j["id"] ?? "").toString(),
+        clientName: (j["clientName"] ?? "").toString(),
+        createdAt: DateTime.tryParse((j["createdAt"] ?? "").toString()) ??
+            DateTime.now(),
+        originTitle: (j["originTitle"] ?? "").toString().trim().isEmpty
+            ? null
+            : (j["originTitle"] ?? "").toString(),
+        originPowerW:
+            j["originPowerW"] == null ? null : (j["originPowerW"]).toDouble(),
+        originVoltage:
+            j["originVoltage"] == null ? null : (j["originVoltage"]).toInt(),
+        originDistanceM: j["originDistanceM"] == null
+            ? null
+            : (j["originDistanceM"]).toDouble(),
+        signatureB64: (j["signatureB64"] ?? "").toString().trim().isEmpty
+            ? null
+            : (j["signatureB64"] ?? "").toString(),
+        marginPercent: (j["marginPercent"] ?? true) == true,
+        marginValue: (j["marginValue"] ?? 0).toDouble(),
+        materials: (j["materials"] as List? ?? [])
+            .map((e) => BudgetItem.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        services: (j["services"] as List? ?? [])
+            .map((e) =>
+                BudgetServiceLine.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+      );
+
+  String toJsonString() => jsonEncode(toJson());
+  static BudgetDoc fromJsonString(String s) => fromJson(jsonDecode(s));
+}

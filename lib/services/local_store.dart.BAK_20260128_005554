@@ -1,0 +1,116 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class LocalStore {
+  // PRO
+  static const String _keyPro = 'is_pro';
+
+  static Future<bool> isPro() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyPro) ?? false;
+  }
+
+  static Future<void> setPro(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyPro, value);
+  }
+
+  // Perfil
+  static const String _keyProfile = 'profile_json';
+
+  static Future<Map<String, dynamic>> getProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyProfile);
+    if (raw == null || raw.trim().isEmpty) {
+      return {
+        "nome": "Felype Guimarães",
+        "empresa": "FG Elétrica",
+      };
+    }
+    try {
+      final obj = jsonDecode(raw);
+      if (obj is Map<String, dynamic>) return obj;
+      if (obj is Map) return obj.map((k, v) => MapEntry(k.toString(), v));
+    } catch (_) {}
+    return {
+      "nome": "Felype Guimarães",
+      "empresa": "FG Elétrica",
+    };
+  }
+
+  static Future<void> setProfile(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyProfile, jsonEncode(data));
+  }
+
+  // Agenda (lista simples)
+  static const String _keyAgenda = 'agenda_items';
+
+  static Future<List<Map<String, dynamic>>> getAgenda() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyAgenda);
+    if (raw == null || raw.trim().isEmpty) return [];
+    try {
+      final obj = jsonDecode(raw);
+      if (obj is List) {
+        return obj
+            .map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v)))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<void> setAgenda(List<Map<String, dynamic>> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyAgenda, jsonEncode(items));
+  }
+
+  // Orçamentos (lista simples)
+  static const String _keyBudgets = 'budgets_items';
+
+  static Future<List<Map<String, dynamic>>> getBudgets() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyBudgets);
+    if (raw == null || raw.trim().isEmpty) return [];
+    try {
+      final obj = jsonDecode(raw);
+      if (obj is List) {
+        return obj
+            .map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v)))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<void> setBudgets(List<Map<String, dynamic>> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyBudgets, jsonEncode(items));
+  }
+
+  // Equipamento selecionado (pré-preencher cálculo) — fica guardado, mas SEM mexer no calc por enquanto
+  static const String _keyLastEquip = 'last_equip';
+
+  static Future<void> setLastEquipamento(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLastEquip, jsonEncode(data));
+  }
+
+  static Future<Map<String, dynamic>?> getLastEquipamento() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyLastEquip);
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final obj = jsonDecode(raw);
+      if (obj is Map<String, dynamic>) return obj;
+      if (obj is Map) return obj.map((k, v) => MapEntry(k.toString(), v));
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<void> clearLastEquipamento() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyLastEquip);
+  }
+}

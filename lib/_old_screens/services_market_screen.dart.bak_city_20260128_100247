@@ -1,0 +1,367 @@
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../models/service_request.dart';
+import '../services/local_store.dart';
+import '../services/market/market_backend.dart';
+import '../services/market/local_market_backend.dart';
+import '../services/market/supabase_market_backend.dart';
+import '../services/service_requests_store.dart';
+
+class ServicesMarketScreen extends StatefulWidget {
+  const ServicesMarketScreen({super.key});
+
+  @override
+  State<ServicesMarketScreen> createState() => _ServicesMarketScreenState();
+}
+
+class _ServicesMarketScreenState extends State<ServicesMarketScreen> {
+  
+  // Backend do Marketplace:
+  // - Tenta Supabase (online)
+  // - Se der ruim, cai no offline (LocalStore)
+  late final MarketBackend _backend = _pickBackend();
+
+  MarketBackend _pickBackend() {
+    try {
+      return SupabaseMarketBackend();
+    } catch (_) {
+      return LocalMarketBackend();
+    }
+  }
+
+String _role = 'client'; // client | pro
+  bool _loading = true;
+  String? _err;
+
+  final TextEditingController _qCtrl = TextEditingController();
+  bool _showDone = false;
+
+  List<ServiceRequest> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    _qCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
+
+    try {
+      final role =
+          await LocalStore.getMarketRole().timeout(const Duration(seconds: 6));
+      final open = await _backend
+          .listRequests(done: false)
+          .timeout(const Duration(seconds: 6));
+      final done = await _backend
+          .listRequests(done: true)
+          .timeout(const Duration(seconds: 6));
+      final items = <ServiceRequest>[...open, ...done];
+
+      if (!mounted) return;
+      setState(() {
+        _role = role;
+        _items = items;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _err = e.toString();
+      });
+      // ignore: avoid_print
+      print('SERVICES_TAB_ERROR: $e');
+    }
+  }
+
+  Future<void> _setRole(String role) async {
+    await LocalStore.setMarketRole(role);
+    await _reload();
+  }
+
+  String _onlyDigits(String s) => s.replaceAll(RegExp(r'\D+'), '');
+
+  Future<void> _openWhatsApp({
+    required String phone,
+    required String text,
+  }) async {
+    final p = _onlyDigits(phone);
+    if (p.isEmpty) return;
+    final url = Uri.parse('https://wa.me/$p?text=${Uri.encodeComponent(text)}');
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _newRequest() async {
+    final tCtrl = TextEditingController();
+    final dCtrl = TextEditingController();
+    final cCtrl = TextEditingController();
+    final nCtrl = TextEditingController();
+    final pCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Novo pedido de serviço'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                controller: tCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Título (ex: trocar disjuntor)',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: dCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Descrição (detalhes do problema)',
+                ),
+                minLines: 3,
+                maxLines: 5,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: cCtrl,
+                decoration: const InputDecoration(labelText: 'Cidade/Bairro'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: nCtrl,
+                decoration: const InputDecoration(labelText: 'Seu nome'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: pCtrl,
+                decoration:
+                    const InputDecoration(labelText: 'WhatsApp (com DDD)'),
+                keyboardType: TextInputType.phone,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Publicar'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    final doc = ServiceRequest(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}',
+      createdAt: DateTime.now(),
+      title: tCtrl.text.trim(),
+      description: dCtrl.text.trim(),
+      city: cCtrl.text.trim(),
+      contactName: nCtrl.text.trim(),
+      contactPhone: pCtrl.text.trim(),
+      done: false,
+    );
+
+    await _backend.upsert(doc);
+    await _reload();
+  }
+
+  Future<void> _markDone(ServiceRequest doc, bool done) async {
+    doc.done = done;
+    await _backend.upsert(doc);
+    await _reload();
+  }
+
+  Widget _pill(String text, {required bool on, required VoidCallback tap}) {
+    return InkWell(
+      onTap: tap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color: on ? Colors.white.withOpacity(.16) : Colors.white.withOpacity(.07),
+          border: Border.all(color: Colors.white.withOpacity(.14)),
+        ),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_err != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 42),
+              const SizedBox(height: 10),
+              const Text(
+                'Não consegui carregar a aba Serviços.',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _err!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _reload,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Tentar de novo'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final q = _qCtrl.text.trim().toLowerCase();
+
+    final openItems = _items.where((e) => !e.done).toList();
+    final doneItems = _items.where((e) => e.done).toList();
+
+    List<ServiceRequest> list = _showDone ? doneItems : openItems;
+    if (q.isNotEmpty) {
+      list = list
+          .where((e) =>
+              e.title.toLowerCase().contains(q) ||
+              e.description.toLowerCase().contains(q) ||
+              e.city.toLowerCase().contains(q) ||
+              e.contactName.toLowerCase().contains(q))
+          .toList();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'client', label: Text('Sou Cliente')),
+                    ButtonSegment(value: 'pro', label: Text('Sou Profissional')),
+                  ],
+                  selected: {_role},
+                  onSelectionChanged: (s) => _setRole(s.first),
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (_role == 'client')
+                ElevatedButton.icon(
+                  onPressed: _newRequest,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Novo'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          TextField(
+            controller: _qCtrl,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: 'Buscar (título, cidade, descrição...)',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              _pill('Abertos (${openItems.length})',
+                  on: !_showDone,
+                  tap: () => setState(() => _showDone = false)),
+              const SizedBox(width: 8),
+              _pill('Concluídos (${doneItems.length})',
+                  on: _showDone,
+                  tap: () => setState(() => _showDone = true)),
+              const Spacer(),
+              IconButton(
+                onPressed: _reload,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Recarregar',
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          if (_role == 'pro') ...[
+            const Text(
+              'Profissional: toque no WhatsApp para chamar o cliente.',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          Expanded(
+            child: ListView(
+              children: list.map((e) {
+                final title = e.title.isEmpty ? '(sem título)' : e.title;
+                final city = e.city.isEmpty ? '—' : e.city;
+                final who = e.contactName.isEmpty ? 'Cliente' : e.contactName;
+
+                return Card(
+                  child: ListTile(
+                    title: Text(title),
+                    subtitle: Text('$city • $who\n${e.description}'.trim()),
+                    isThreeLine: true,
+                    trailing: _role == 'client'
+                        ? IconButton(
+                            icon: Icon(
+                              e.done ? Icons.undo : Icons.check_circle_outline,
+                            ),
+                            onPressed: () => _markDone(e, !e.done),
+                            tooltip:
+                                e.done ? 'Voltar para aberto' : 'Marcar concluído',
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.chat),
+                            onPressed: () => _openWhatsApp(
+                              phone: e.contactPhone,
+                              text:
+                                  'Olá! Vi seu pedido no app FG Elétrica: "$title". Podemos conversar?',
+                            ),
+                            tooltip: 'Chamar no WhatsApp',
+                          ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

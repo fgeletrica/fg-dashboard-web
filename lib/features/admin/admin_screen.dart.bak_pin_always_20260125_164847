@@ -1,0 +1,571 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/app_theme.dart';
+import '../../routes/app_routes.dart';
+import '../../services/pro_access.dart';
+
+class AdminScreen extends StatefulWidget {
+  const AdminScreen({super.key});
+
+  @override
+  State<AdminScreen> createState() => _AdminScreenState();
+}
+
+class _AdminScreenState extends State<AdminScreen> {
+  // ====== CORES (usa seu tema, mas sem depender de AppTheme em tudo) ======
+  Color get bg => AppTheme.bg;
+  Color get card => AppTheme.card;
+  Color get border => AppTheme.border.withOpacity(.35);
+  Color get gold => AppTheme.gold;
+
+  // ====== AUTH ======
+  static const String _kAdminPin = 'admin_pass_v1';
+  static const String _kAdminAuthed = 'admin_authed_v1';
+  static const String _defaultPin = '2442';
+
+  final _pinCtrl = TextEditingController();
+  final _curPinCtrl = TextEditingController();
+  final _newPinCtrl = TextEditingController();
+
+  bool _loading = true;
+  bool _authed = false;
+
+  // ====== CUPOM ======
+  static const String _kCupomEnabled = 'cupom_enabled_v1';
+  static const String _kCupomCode = 'cupom_code_v1';
+  static const String _kCupomPct = 'cupom_pct_v1';
+  static const String _kCupomEndAtMs = 'cupom_endat_ms_v1';
+
+  bool _cupomEnabled = false;
+  final _cupomCodeCtrl = TextEditingController();
+  final _cupomPctCtrl = TextEditingController();
+  final _cupomDaysCtrl = TextEditingController(text: '2'); // padrão 2 dias
+  int? _cupomEndAtMs;
+
+  // ====== AVISO HOME ======
+  static const String _kHomeNotice = 'home_notice_v1';
+  final _noticeCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  @override
+  void dispose() {
+    _pinCtrl.dispose();
+    _curPinCtrl.dispose();
+    _newPinCtrl.dispose();
+    _cupomCodeCtrl.dispose();
+    _cupomPctCtrl.dispose();
+    _cupomDaysCtrl.dispose();
+    _noticeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _snack(String t) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+  }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: bg,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: border),
+        ),
+      );
+
+  Widget _cardBox({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: child,
+    );
+  }
+
+  Future<String> _getSavedPin() async {
+    final sp = await SharedPreferences.getInstance();
+    final saved = (sp.getString(_kAdminPin) ?? '').trim();
+    return saved.isEmpty ? _defaultPin : saved;
+  }
+
+  int _toInt(String s, int fallback) =>
+      int.tryParse(s.trim().replaceAll(',', '.')) ?? fallback;
+
+  double _toDouble(String s, double fallback) =>
+      double.tryParse(s.trim().replaceAll(',', '.')) ?? fallback;
+
+  Future<void> _loadAll() async {
+    final sp = await SharedPreferences.getInstance();
+
+    final authed = sp.getBool(_kAdminAuthed) ?? false;
+
+    final enabled = sp.getBool(_kCupomEnabled) ?? false;
+    final code = (sp.getString(_kCupomCode) ?? '').trim();
+    final pct = (sp.getString(_kCupomPct) ?? '').trim();
+    final endAt = sp.getInt(_kCupomEndAtMs);
+
+    // auto-desativa se expirou
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (endAt != null && now > endAt) {
+      await sp.setBool(_kCupomEnabled, false);
+    }
+
+    final notice = (sp.getString(_kHomeNotice) ?? '').trim();
+
+    if (!mounted) return;
+    setState(() {
+      _authed = authed;
+      _loading = false;
+
+      _cupomEnabled = enabled;
+      _cupomCodeCtrl.text = code;
+      _cupomPctCtrl.text = pct;
+      _cupomEndAtMs = endAt;
+
+      _noticeCtrl.text = notice;
+    });
+  }
+
+  Future<void> _login() async {
+    final typed = _pinCtrl.text.trim();
+    final saved = await _getSavedPin();
+
+    if (typed == saved) {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setBool(_kAdminAuthed, true);
+      if (!mounted) return;
+      setState(() => _authed = true);
+      _pinCtrl.clear();
+      _snack('Admin liberado ✅');
+      return;
+    }
+    _snack('PIN incorreto');
+  }
+
+  Future<void> _logout() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kAdminAuthed, false);
+    if (!mounted) return;
+    setState(() => _authed = false);
+    _snack('Saiu do Admin');
+  }
+
+  Future<void> _changePin() async {
+    final cur = _curPinCtrl.text.trim();
+    final next = _newPinCtrl.text.trim();
+    final saved = await _getSavedPin();
+
+    if (cur != saved) {
+      _snack('PIN atual incorreto');
+      return;
+    }
+    if (next.length < 4) {
+      _snack('Novo PIN precisa ter 4 dígitos');
+      return;
+    }
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_kAdminPin, next);
+    _curPinCtrl.clear();
+    _newPinCtrl.clear();
+    _snack('PIN atualizado ✅');
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  String _fmtLeft(int ms) {
+    if (ms <= 0) return "0s";
+    final s = (ms / 1000).floor();
+    final d = s ~/ 86400;
+    final h = (s % 86400) ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    final sec = s % 60;
+    if (d > 0) return "${d}d ${h}h ${m}m";
+    if (h > 0) return "${h}h ${m}m";
+    if (m > 0) return "${m}m ${sec}s";
+    return "${sec}s";
+  }
+
+  Future<void> _saveCupom() async {
+    final sp = await SharedPreferences.getInstance();
+
+    final enabled = _cupomEnabled;
+    final code = _cupomCodeCtrl.text.trim();
+    final pct = _cupomPctCtrl.text.trim();
+    final days = _toInt(_cupomDaysCtrl.text, 2);
+
+    // se não tem código, desliga
+    if (enabled && code.isEmpty) {
+      _snack('Digite um código do cupom');
+      return;
+    }
+
+    int? endAt;
+    if (enabled) {
+      endAt = DateTime.now().add(Duration(days: days)).millisecondsSinceEpoch;
+    } else {
+      endAt = null;
+    }
+
+    await sp.setBool(_kCupomEnabled, enabled);
+    await sp.setString(_kCupomCode, code);
+    await sp.setString(_kCupomPct, pct);
+    if (endAt == null) {
+      await sp.remove(_kCupomEndAtMs);
+    } else {
+      await sp.setInt(_kCupomEndAtMs, endAt);
+    }
+
+    if (!mounted) return;
+    setState(() => _cupomEndAtMs = endAt);
+    _snack('Cupom salvo ✅');
+  }
+
+  Future<void> _expireCupomNow() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kCupomEnabled, false);
+    await sp.remove(_kCupomEndAtMs);
+    if (!mounted) return;
+    setState(() {
+      _cupomEnabled = false;
+      _cupomEndAtMs = null;
+    });
+    _snack('Cupom expirado agora ✅');
+  }
+
+  Future<void> _saveHomeNotice() async {
+    final sp = await SharedPreferences.getInstance();
+    final txt = _noticeCtrl.text.trim();
+    await sp.setString(_kHomeNotice, txt);
+    _snack('Aviso salvo ✅');
+  }
+
+  // ===== PRO DEV / TRIAL =====
+  Future<void> _demo(Duration d) async {
+    try {
+      await ProAccess.startTrial(duration: d);
+      _snack('Demo ativada ✅');
+      setState(() {});
+    } catch (e) {
+      _snack('Erro demo: $e');
+    }
+  }
+
+  Future<void> _toggleProDev(bool v) async {
+    try {
+      await ProAccess.setProDev(v);
+      _snack(v ? 'PRO (DEV) ativado' : 'PRO (DEV) desativado');
+      setState(() {});
+    } catch (e) {
+      _snack('Erro: $e');
+    }
+  }
+
+  Future<void> _resetTrial() async {
+    try {
+      await ProAccess.resetTrial();
+      _snack('Trial resetado');
+      setState(() {});
+    } catch (e) {
+      _snack('Erro: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: bg,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_authed) return _buildLogin();
+    return _buildAdmin();
+  }
+
+  Widget _buildLogin() {
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(backgroundColor: bg, title: const Text('Admin')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _cardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Acesso Admin',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _pinCtrl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  decoration: _dec('Digite o PIN'),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: gold,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _login,
+                    child: const Text('Entrar', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text('Padrão: $_defaultPin',
+                    style: TextStyle(color: Colors.white.withOpacity(.7), fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdmin() {
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        title: const Text('Admin'),
+        actions: [
+          IconButton(tooltip: 'Sair', onPressed: _logout, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _cardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Cupom / Promoção',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _cupomEnabled,
+                  onChanged: (v) => setState(() => _cupomEnabled = v),
+                  title: const Text('Ativar cupom', style: TextStyle(color: Colors.white)),
+                ),
+                TextField(controller: _cupomCodeCtrl, decoration: _dec('Código (ex: FG10)')),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _cupomPctCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: _dec('Desconto (%) — ex: 10'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _cupomDaysCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: _dec('Dias para expirar (ex: 2)'),
+                ),
+                const SizedBox(height: 10),
+                if (_cupomEndAtMs != null)
+                  Text(
+                    'Expira em: ${_fmtLeft(_cupomEndAtMs! - DateTime.now().millisecondsSinceEpoch)}',
+                    style: TextStyle(color: gold, fontWeight: FontWeight.w900),
+                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: gold,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: _saveCupom,
+                        child: const Text('Salvar cupom', style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: _expireCupomNow,
+                        child: const Text('Expirar agora', style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          _cardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Aviso na Home',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _noticeCtrl,
+                  maxLines: 3,
+                  decoration: _dec('Texto do aviso'),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: gold,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _saveHomeNotice,
+                    child: const Text('Salvar aviso', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          _cardBox(
+            child: FutureBuilder(
+              future: Future.wait([
+                ProAccess.getProDev(),
+                ProAccess.hasProAccessNow(),
+                ProAccess.trialRemaining(),
+              ]),
+              builder: (context, snap) {
+                final list = (snap.data as List?) ?? [false, false, Duration.zero];
+                final proDev = (list[0] as bool?) ?? false;
+                final hasNow = (list[1] as bool?) ?? false;
+                final left = (list[2] as Duration?) ?? Duration.zero;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('PRO / Demo (DEV)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                    const SizedBox(height: 8),
+                    Text('PRO DEV: ${proDev ? "SIM" : "NÃO"}', style: const TextStyle(color: Colors.white70)),
+                    Text('Acesso agora: ${hasNow ? "SIM" : "NÃO"}', style: const TextStyle(color: Colors.white70)),
+                    Text('Restante: ${ProAccess.formatDuration(left)}', style: const TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _demo(const Duration(minutes: 10)),
+                            child: const Text('Demo 10 min'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _demo(const Duration(hours: 1)),
+                            child: const Text('Demo 1h'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: gold, foregroundColor: Colors.black),
+                            onPressed: () => _toggleProDev(true),
+                            child: const Text('Ativar PRO (DEV)'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
+                            onPressed: () => _toggleProDev(false),
+                            child: const Text('Desativar PRO (DEV)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _resetTrial,
+                        child: const Text('Reset Trial'),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          _cardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Trocar PIN (exige PIN atual)',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _curPinCtrl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  decoration: _dec('PIN atual'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _newPinCtrl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  decoration: _dec('Novo PIN (4 dígitos)'),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: gold,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _changePin,
+                    child: const Text('Salvar novo PIN', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 6),
+          TextButton(
+            onPressed: () => Navigator.of(context).pushNamed(AppRoutes.home),
+            child: const Text('Voltar pra Home'),
+          ),
+        ],
+      ),
+    );
+  }
+}
