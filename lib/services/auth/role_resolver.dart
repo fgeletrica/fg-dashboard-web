@@ -5,31 +5,29 @@ import '../local_store.dart';
 class RoleResolver {
   static final _sb = Supabase.instance.client;
 
-  /// Fonte de verdade: public.profiles.role  ('pro' | 'client')
-  /// - Server FIRST
-  /// - Retry curto pra evitar corrida pós-login
-  /// - Só usa cache se não conseguir ler do server
-  static Future<String> resolveRole() async {
-    // espera sessão aparecer (relogin costuma dar currentUser null por alguns ms)
-    for (int i = 0; i < 8; i++) {
-      final u = _sb.auth.currentUser;
-      if (u != null) break;
-      await Future.delayed(const Duration(milliseconds: 150));
+  /// STRICT:
+  /// - tenta pegar SEMPRE do server (profiles.role)
+  /// - só usa cache se existir (nullable)
+  /// - se não conseguir determinar, lança exception (pra UI não “mentir” como client)
+  static Future<String> resolveRoleStrict({
+    Duration maxWait = const Duration(seconds: 6),
+  }) async {
+    final deadline = DateTime.now().add(maxWait);
+
+    // espera currentUser estabilizar
+    while (_sb.auth.currentUser == null && DateTime.now().isBefore(deadline)) {
+      await Future.delayed(const Duration(milliseconds: 120));
     }
 
     final u = _sb.auth.currentUser;
     if (u == null) {
-      // sem sessão: tenta cache, senão client
-      try {
-        final cached = await LocalStore.getMarketRole();
-        return (cached == 'pro') ? 'pro' : 'client';
-      } catch (_) {
-        return 'client';
-      }
+      final cached = await LocalStore.getMarketRoleNullable();
+      if (cached != null) return cached;
+      throw Exception('Sem sessão e sem role em cache');
     }
 
-    // tenta buscar role no profiles com retry (evita race / RLS / refresh)
-    for (int i = 0; i < 12; i++) {
+    // tenta ler do server com retry até maxWait
+    while (DateTime.now().isBefore(deadline)) {
       try {
         final Map<String, dynamic>? res = await _sb
             .from('profiles')
@@ -38,7 +36,6 @@ class RoleResolver {
             .maybeSingle();
 
         final raw = (res?['role'] ?? '').toString().trim().toLowerCase();
-
         if (raw == 'pro' || raw == 'client') {
           try {
             await LocalStore.setMarketRole(raw);
@@ -46,16 +43,24 @@ class RoleResolver {
           return raw;
         }
       } catch (_) {
-        // ignora e tenta de novo
+        // erro de rede/DNS/RLS -> tenta de novo até deadline
       }
-
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 220));
     }
 
-    // fallback: cache
+    // fallback: cache REAL (se existir)
+    final cached = await LocalStore.getMarketRoleNullable();
+    if (cached != null) return cached;
+
+    throw Exception('Não consegui resolver role (sem server e sem cache)');
+  }
+
+  /// “Soft”: mantém compat com código antigo.
+  /// Se strict falhar, devolve 'client' (mas a navegação principal deve usar strict).
+  static Future<String> resolveRole() async {
     try {
-      final cached = await LocalStore.getMarketRole();
-      return (cached == 'pro') ? 'pro' : 'client';
+      final r = await resolveRoleStrict(maxWait: const Duration(seconds: 6));
+      return (r == 'pro') ? 'pro' : 'client';
     } catch (_) {
       return 'client';
     }

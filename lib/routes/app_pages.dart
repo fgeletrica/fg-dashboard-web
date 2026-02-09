@@ -44,7 +44,7 @@ import "../features/admin/admin_screen.dart";
 class AppPages {
   static Map<String, WidgetBuilder> get routes => {
         AppRoutes.entry: (_) => const AppEntry(),
-        AppRoutes.home: (_) => const GateScreen(),
+        AppRoutes.home: (_) => const AuthGateScreen(),
 
         // auth
         AppRoutes.authGate: (_) => const AuthGateScreen(),
@@ -53,10 +53,7 @@ class AppPages {
 
         // homes
         AppRoutes.homePro: (_) => const HomeProScreen(),
-        AppRoutes.homeClient: (_) => const HomeClientScreen(),
-        AppRoutes.home + "_main": (_) => const HomeScreen(), // compat
-
-        // ferramentas principais
+        AppRoutes.homeClient: (_) => const HomeClientScreen(),// ferramentas principais
         AppRoutes.calc: (_) => const CalcScreen(),
         AppRoutes.agenda: (_) => const AgendaScreen(),
         AppRoutes.orcamentos: (_) => OrcamentosScreen(),

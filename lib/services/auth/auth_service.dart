@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../local_store.dart';
+import 'role_resolver.dart';
 
 class AuthService {
   static final SupabaseClient _sb = Supabase.instance.client;
@@ -23,9 +23,10 @@ class AuthService {
       throw Exception('Falha ao entrar');
     }
 
-    // sincroniza role real (profiles.role) e salva no LocalStore
+    // IMPORTANTE: não força cache pra "client" em corrida pós-login
+    // Só aquece o cache se conseguir ler um valor válido do server.
     try {
-      await getMyRole(); // getMyRole já faz setMarketRole internamente
+      await getMyRole();
     } catch (_) {}
   }
 
@@ -47,18 +48,19 @@ class AuthService {
       throw Exception('Falha ao criar usuário');
     }
 
-    // garante profile
+    final normalized = (role == 'pro') ? 'pro' : 'client';
+
     await _sb.from('profiles').upsert({
       'id': u.id,
-      'role': role == 'pro' ? 'pro' : 'client',
+      'role': normalized,
       'name': name,
       'city': city,
       'phone': phone,
     });
 
-    // salva role local
+    // aqui pode gravar porque foi você que definiu o role no signUp
     try {
-      await LocalStore.setMarketRole(role == 'pro' ? 'pro' : 'client');
+      await LocalStore.setMarketRole(normalized);
     } catch (_) {}
   }
 
@@ -66,31 +68,44 @@ class AuthService {
     try {
       await _sb.auth.signOut();
     } finally {
-      // limpa role local pra não “vazar” pro próximo login
+      // limpa role local
       try {
         await LocalStore.clearMarketRole();
       } catch (_) {}
     }
   }
 
-  // =========================
-  // ROLE (CLIENTE vs PRO)
-  // =========================
+  /// Lê role do server.
+  /// REGRA: só grava no cache quando server devolve "pro" ou "client".
+  /// Se vier null/ruim (corrida/RLS/momento), NÃO sobrescreve com "client".
   static Future<String> getMyRole() async {
     final u = user;
-    if (u == null) return 'client';
+    if (u == null) {
+      // sem user: não mexe em cache
+      return 'client';
+    }
 
-    final res =
-        await _sb.from('profiles').select('role').eq('id', u.id).maybeSingle();
+    final Map<String, dynamic>? res = await _sb
+        .from('profiles')
+        .select('role')
+        .eq('id', u.id)
+        .maybeSingle();
 
-    final raw = (res?['role'] ?? 'client').toString().trim();
-    final role = (raw == 'pro') ? 'pro' : 'client';
-    final normalized = role == 'pro' ? 'pro' : 'client';
+    final raw = (res?['role'] ?? '').toString().trim().toLowerCase();
 
+    if (raw == 'pro' || raw == 'client') {
+      try {
+        await LocalStore.setMarketRole(raw);
+      } catch (_) {}
+      return raw;
+    }
+
+    // server não respondeu com valor válido -> usa cache, sem sobrescrever
     try {
-      await LocalStore.setMarketRole(normalized);
-    } catch (_) {}
-
-    return normalized;
+      final cached = await LocalStore.getMarketRole();
+      return (cached == 'pro') ? 'pro' : 'client';
+    } catch (_) {
+      return 'client';
+    }
   }
 }

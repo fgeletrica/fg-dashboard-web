@@ -1,5 +1,5 @@
 import 'dart:async';
-import '../services/auth/role_resolver.dart';
+import '../services/auth/role_service.dart';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_theme.dart';
 import '../services/auth/auth_service.dart';
-import '../services/auth/role_resolver.dart';
+import '../services/auth/role_service.dart';
 import '../services/avatar_cache.dart';
 import 'community_screen.dart';
 
@@ -30,7 +30,7 @@ class _ServicesMarketScreenState extends State<ServicesMarketScreen> {
     super.initState();
     () async {
       try {
-        final role = await RoleResolver.resolveRole();
+        final role = await RoleService.getRoleStrict();
         if (mounted) setState(() => _role = role);
       } catch (_) {}
     }();
@@ -48,7 +48,7 @@ class _ServicesMarketScreenState extends State<ServicesMarketScreen> {
     if (!mounted) return;
     setState(() => _loadingRole = true);
     try {
-      final r = await RoleResolver.resolveRole();
+      final r = await RoleService.getRoleStrict();
       if (!mounted) return;
       setState(() {
         _role = r == 'pro' ? 'pro' : 'client';

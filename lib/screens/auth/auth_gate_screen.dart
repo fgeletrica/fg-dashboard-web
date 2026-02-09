@@ -1,9 +1,12 @@
+import 'dart:async';
+import 'dart:developer' as dev;
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 import '../../services/auth/auth_service.dart';
-import '../../services/auth/role_resolver.dart';
+import '../../services/auth/role_service.dart';
 
 class AuthGateScreen extends StatefulWidget {
   const AuthGateScreen({super.key});
@@ -15,22 +18,33 @@ class AuthGateScreen extends StatefulWidget {
 class _AuthGateScreenState extends State<AuthGateScreen> {
   bool _checking = true;
   bool _navigated = false;
+  StreamSubscription<AuthState>? _sub;
 
   @override
   void initState() {
     super.initState();
     _bootstrap();
 
-    Supabase.instance.client.auth.onAuthStateChange.listen((_) async {
+    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      dev.log('[GATE] onAuthStateChange: ${event.event}', name: 'AUTH');
       if (!mounted) return;
       _navigated = false;
       _bootstrap();
     });
   }
 
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
   Future<void> _bootstrap() async {
     if (!mounted) return;
     setState(() => _checking = true);
+
+    final sb = Supabase.instance.client;
+    dev.log('[GATE] isLoggedIn=${AuthService.isLoggedIn} user=${sb.auth.currentUser?.id}', name: 'AUTH');
 
     if (!AuthService.isLoggedIn) {
       if (!mounted) return;
@@ -38,10 +52,13 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
       return;
     }
 
-    // aquece o resolver (garante cache correto)
+    // aquece o resolver, mas com timeout pra não travar infinito
     try {
-      await RoleResolver.resolveRole();
-    } catch (_) {}
+      final r = await RoleService.getRoleStrict().timeout(const Duration(seconds: 6));
+      dev.log('[GATE] warm role=$r', name: 'AUTH');
+    } catch (e) {
+      dev.log('[GATE] warm role FAILED: $e', name: 'AUTH');
+    }
 
     if (!mounted) return;
     setState(() => _checking = false);
@@ -62,18 +79,22 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     }
 
     return FutureBuilder<String>(
-      future: RoleResolver.resolveRole(),
+      future: RoleService.getRoleStrict().timeout(
+        const Duration(seconds: 6),
+        onTimeout: () => 'client',
+      ),
       builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+        if (snap.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-
-        if (_navigated) return const Scaffold(body: SizedBox.shrink());
-        _navigated = true;
 
         final role = (snap.data == 'pro') ? 'pro' : 'client';
         final dest = (role == 'pro') ? AppRoutes.homePro : AppRoutes.homeClient;
+
+        dev.log('[GATE] decision role=$role dest=$dest', name: 'AUTH');
+
+        if (_navigated) return const Scaffold(body: SizedBox.shrink());
+        _navigated = true;
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;

@@ -28,9 +28,18 @@ class LocalStore {
   }
 
   // ====== MARKET ROLE ======
-  static Future<String> getMarketRole() async {
+  /// Retorna null se ainda não existe cache salvo (pra não “inventar client”)
+  static Future<String?> getMarketRoleNullable() async {
     final sp = await _sp();
-    final v = sp.getString(_keyMarketRole) ?? 'client';
+    final v = sp.getString(_keyMarketRole);
+    if (v == null) return null;
+    return (v == 'pro') ? 'pro' : 'client';
+  }
+
+  /// Compat: quem chamar isso recebe client como fallback.
+  /// (Mas o resolver STRICT usa o Nullable.)
+  static Future<String> getMarketRole() async {
+    final v = await getMarketRoleNullable();
     return (v == 'pro') ? 'pro' : 'client';
   }
 
@@ -64,12 +73,10 @@ class LocalStore {
   static Future<void> setAgenda(List<dynamic> items) async {
     final sp = await _sp();
     try {
-      // garante formato List<Map>
       final norm =
           items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       await sp.setString(_keyAgenda, jsonEncode(norm));
     } catch (_) {
-      // se der ruim, salva lista vazia (não quebra o app)
       await sp.setString(_keyAgenda, jsonEncode([]));
     }
   }
